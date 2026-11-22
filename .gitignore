@@ -10,3 +10,5 @@
 /public/storage
 /.idea/
 /.vscode/
+
+/storage/framework/testing/

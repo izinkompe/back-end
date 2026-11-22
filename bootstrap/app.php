@@ -9,6 +9,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias(['role' => App\Http\Middleware\RequireRole::class]);
         $middleware->appendToGroup('api', App\Http\Middleware\NormalizeDates::class);
+        $middleware->appendToGroup('api', App\Http\Middleware\RequireHttps::class);
+        $middleware->replace(\Illuminate\Http\Middleware\TrustProxies::class, App\Http\Middleware\TrustProxies::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(fn (Request $request, Throwable $e) => $request->is('api/*') || $request->expectsJson());

@@ -19,7 +19,10 @@ class OrderController
     public function show(Request $r, Order $order)
     {
         $this->authorize($r, $order);
-        return ['order' => $order->load(['payment', 'complaints', 'refund']), 'contacts' => \App\Models\User::whereIn('id', [$order->buyer_id, $order->farmer_id])->get(['id', 'name', 'phone', 'organization']), 'history' => AuditLog::where('subject_type', Order::class)->where('subject_id', $order->id)->orderBy('id')->get(['action', 'before', 'after', 'reason', 'created_at'])];
+        $order->load(['payment', 'complaints.messages', 'refund', 'corrections']);
+        $subjects = [[Order::class, [$order->id]], [\App\Models\Payment::class, $order->payment ? [$order->payment->id] : []], [\App\Models\Refund::class, $order->refund ? [$order->refund->id] : []], [\App\Models\Complaint::class, $order->complaints->pluck('id')->all()], [\App\Models\Distribution::class, \App\Models\Distribution::where('order_id', $order->id)->pluck('id')->all()]];
+        $history = AuditLog::where(function ($q) use ($subjects) { foreach ($subjects as [$type, $ids]) { if ($ids) { $q->orWhere(fn ($s) => $s->where('subject_type', $type)->whereIn('subject_id', $ids)); } } })->orderBy('id')->get(['actor_id', 'subject_type', 'action', 'before', 'after', 'reason', 'created_at']);
+        return ['order' => $order, 'contacts' => \App\Models\User::whereIn('id', [$order->buyer_id, $order->farmer_id])->get(['id', 'name', 'phone', 'organization']), 'history' => $history];
     }
     public function store(Request $r, OrderFlow $flow)
     {
@@ -43,10 +46,12 @@ class OrderController
         $this->buyer($r, $order); $v = $r->validate(['received_kg' => 'required|numeric|min:0|max:999999.999|decimal:0,3']);
         $grams = (float) $v['received_kg'] === 0.0 ? 0 : Pricing::grams($v['received_kg']);
         return $flow->mutate($order, function ($o, $offer) use ($grams, $flow) {
-            abort_unless(in_array($o->status, ['ready', 'completed']), 409, 'Pesanan belum siap atau sedang ditangani.');
+            abort_unless(in_array($o->status, ['ready', 'issue', 'completed']) && in_array($o->payment_status, ['paid', 'partial_refund'], true), 409, 'Pesanan belum siap atau pembayaran belum dikonfirmasi.');
             abort_if($grams > $o->quantity_g, 422, 'Berat melebihi pesanan.');
             if ($o->status === 'completed') { abort_unless($o->received_g === $grams, 409); return; }
-            if ($grams !== $o->quantity_g) { $o->update(['received_g' => $grams]); $flow->issue($o, 'Selisih berat saat penerimaan.'); }
+            $wasIssue = $o->status === 'issue';
+            $o->update(['buyer_confirmed_at' => now(), 'received_g' => $grams]);
+            if ($grams !== $o->quantity_g || $wasIssue) { $flow->issue($o, 'Pembeli mengonfirmasi penerimaan; admin perlu menyelesaikan masalah/selisih berat.'); }
             else { $flow->complete($o, $offer, $grams); }
         });
     }
@@ -62,9 +67,10 @@ class OrderController
     }
     public function complaint(Request $r, Order $order)
     {
-        $this->authorize($r, $order); $v = $r->validate(['description' => 'required|string|max:5000']);
+        $this->authorize($r, $order); $v = $r->validate(['description' => 'required|string|max:5000', 'type' => 'sometimes|in:quality,weight,pickup,payment,cancellation,other']);
         return \Illuminate\Support\Facades\DB::transaction(function () use ($r, $order, $v) {
-            $c = Complaint::create($v + ['order_id' => $order->id, 'user_id' => $r->user()->id]); Activity::audit($c, 'complaint.created'); return $c;
+            $c = Complaint::create($v + ['order_id' => $order->id, 'user_id' => $r->user()->id]); Activity::audit($c, 'complaint.created');
+            foreach (\App\Models\User::where('role', 'admin')->pluck('id') as $admin) { Activity::notify($admin, 'Pengaduan baru perlu ditinjau.', '/orders/'.$order->id, 'complaint:'.$c->id); } return $c;
         });
     }
     public function propose(Request $r, Order $order, OrderFlow $flow)

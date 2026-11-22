@@ -61,7 +61,8 @@ class Midtrans
     {
         return app(OrderFlow::class)->mutate($order, function (Order $o, $offer) {
             $p = Payment::where('order_id', $o->id)->lockForUpdate()->firstOrFail();
-            $response = $this->client()->get($this->base().'/v2/'.rawurlencode($o->number).'/status');
+            try { $response = $this->client()->get($this->base().'/v2/'.rawurlencode($o->number).'/status'); }
+            catch (\Illuminate\Http\Client\ConnectionException $e) { abort(502, 'Koneksi Midtrans belum tersedia. Status pembayaran dan stok tetap dipertahankan.'); }
             // 404 is not proof of expiry: a Snap token may exist before a payment method is selected.
             if ($response->status() === 404 || (string) $response->json('status_code') === '404') { $p->update(['checked_at' => now()]); return; }
             abort_unless($response->successful(), 502, 'Tidak dapat memeriksa Midtrans. Coba kembali.');
@@ -69,7 +70,8 @@ class Midtrans
             abort_unless(($v['order_id'] ?? '') === $o->number && is_numeric($v['gross_amount'] ?? null) && (float) $v['gross_amount'] === (float) $o->total_idr, 409, 'Nominal atau identitas transaksi berbeda.');
             $status = $v['transaction_status'] ?? ''; $before = $p->getAttributes();
             $paid = $status === 'settlement' || ($status === 'capture' && ($v['fraud_status'] ?? '') === 'accept');
-            $p->update(['status' => $status, 'transaction_id' => $v['transaction_id'] ?? null, 'checked_at' => now()]);
+            abort_unless(in_array($status, ['pending', 'settlement', 'capture', 'deny', 'cancel', 'expire', 'refund', 'partial_refund', 'chargeback', 'partial_chargeback', 'authorize'], true), 502, 'Status Midtrans tidak dikenali.');
+            $p->update(['status' => $status, 'transaction_id' => $v['transaction_id'] ?? null, 'status_message' => mb_substr((string) ($v['status_message'] ?? ''), 0, 2000), 'fraud_status' => isset($v['fraud_status']) ? mb_substr($v['fraud_status'], 0, 30) : null, 'checked_at' => now()]);
             $flow = app(OrderFlow::class);
             if ($paid && $o->payment_status !== 'paid') {
                 $o->payment_status = 'paid';

@@ -72,11 +72,11 @@ Scheduler wajib berjalan agar tenggat, pemeriksaan status, dan pengingat diprose
 
 ## Email reset
 
-Default `MAIL_MAILER=log` menulis email ke log hanya untuk pengembangan. Untuk mengirim sungguhan, ubah `MAIL_MAILER=smtp` dan isi host, port, username, password dan alamat pengirim yang sudah diverifikasi oleh penyedia email. Tautan mengarah ke `FRONTEND_URL/reset-password`; Next.js perlu membuat halaman tersebut.
+Default MAIL_MAILER=array menahan email di memori dan tidak mengirim/menulis token ke log. Alias lama log dipetakan ke transport array untuk kompatibilitas. Gunakan MAIL_MAILER=smtp dengan host, port, username, password dan alamat pengirim yang sesuai, termasuk mailbox SMTP pengembangan untuk uji lokal. Next.js perlu menyediakan /verify-email dan /reset-password. Email akun harus terverifikasi sebelum tautan reset dapat dikirim.
 
 ## Database SQL
 
-Jalur utama yang disarankan adalah migration. `database/sql/schema.mysql.sql` disediakan sebagai referensi/alternatif import manual ke database kosong. Pilih satu jalur. SQL mencakup metadata migration baseline; jangan import SQL di atas tabel yang telah dibuat migration. Jalankan `db:seed` setelah salah satu jalur selesai. Tidak ada SQL atau migration yang dijalankan saat penulisan source.
+Jalur utama yang disarankan adalah migration. `database/sql/schema.mysql.sql` disediakan sebagai referensi/alternatif import manual ke database kosong. Pilih satu jalur. SQL mencakup metadata migration baseline; jangan import SQL di atas tabel yang telah dibuat migration. Jalankan `db:seed` setelah salah satu jalur selesai. Tidak ada SQL atau migration yang dijalankan pada database pengguna; pengujian memakai SQLite sementara di memori.
 
 Jika `migrate` gagal dengan `Table 'users' already exists`, ikuti [pemulihan konflik tabel](TROUBLESHOOTING.md). Jangan menambahkan `hasTable` untuk sekadar melewati tabel: tabel yang sudah ada belum tentu memiliki kolom, indeks dan foreign key yang sesuai.
 
@@ -92,3 +92,18 @@ Jika `migrate` gagal dengan `Table 'users' already exists`, ikuti [pemulihan kon
 8. Aktifkan SMTP, monitoring `/up`, log error, backup database dan storage privat harian. Uji pemulihan terpisah sebelum peluncuran.
 
 Lakukan uji transaksi sandbox dan konkurensi MySQL sebelum deployment. Status `/up` hanya menunjukkan aplikasi dapat bootstrap, bukan audit kesehatan seluruh layanan eksternal.
+
+
+## Memperbarui instalasi yang sudah ada setelah revisi SRS
+
+Backup database dan storage privat terlebih dahulu. Pertahankan APP_KEY, kredensial dan seluruh data. Tidak ada dependency baru pada revisi ini. Jalankan sendiri:
+
+```powershell
+php artisan config:clear
+php artisan migrate
+php artisan test
+```
+
+Jangan menjalankan migrate:fresh untuk upgrade ini. Migration 000002 menambah kolom/tabel tanpa menghapus akun/transaksi. Stok legacy dari reservasi yang pernah dilepas ditahan sampai petani mengonfirmasi layak jual; periksa inventory setelah upgrade.
+
+Produksi menolak request API HTTP biasa. Jika menggunakan reverse proxy yang mengakhiri TLS, isi TRUSTED_PROXIES dengan IP/CIDR proxy yang benar (dipisah koma) sebelum config:cache. Jangan mempercayai semua proxy sembarangan. Koneksi database menggunakan zona UTC. Uji ulang webhook HTTPS setelah deployment.

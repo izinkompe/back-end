@@ -144,3 +144,29 @@ CREATE TABLE migrations (
  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, migration VARCHAR(255) NOT NULL, batch INT NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 INSERT INTO migrations (migration,batch) VALUES ('2026_11_22_000001_create_pangantani_tables',1);
+
+
+-- Revision SRS (equivalent to migration 2026_11_22_000002_align_srs_workflows).
+ALTER TABLE offers ADD withheld_g BIGINT UNSIGNED NOT NULL DEFAULT 0,
+ ADD commodity VARCHAR(150) NULL, ADD moderated_at DATETIME NULL, ADD moderation_reason TEXT NULL, ADD INDEX offers_commodity_index (commodity);
+ALTER TABLE orders ADD buyer_confirmed_at DATETIME NULL, ADD resolution_agreement TEXT NULL;
+ALTER TABLE complaints ADD type VARCHAR(30) NOT NULL DEFAULT 'other', ADD INDEX complaints_type_index (type);
+ALTER TABLE payments ADD status_message TEXT NULL, ADD fraud_status VARCHAR(30) NULL;
+ALTER TABLE emission_factors ADD method_code VARCHAR(50) NOT NULL DEFAULT 'weight_factor_v1',
+ ADD valid_from DATETIME NULL, ADD valid_until DATETIME NULL;
+CREATE TABLE distribution_corrections (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, order_id BIGINT UNSIGNED NOT NULL,
+ recorded_by BIGINT UNSIGNED NOT NULL, idempotency_key VARCHAR(100) NOT NULL,
+ request_hash VARCHAR(64) NOT NULL, old_received_g BIGINT UNSIGNED NOT NULL,
+ new_received_g BIGINT UNSIGNED NOT NULL, reason TEXT NOT NULL, agreement TEXT NOT NULL,
+ created_at TIMESTAMP NULL, updated_at TIMESTAMP NULL,
+ UNIQUE KEY distribution_corrections_order_id_idempotency_key_unique (order_id,idempotency_key),
+ FOREIGN KEY(order_id) REFERENCES orders(id), FOREIGN KEY(recorded_by) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE complaint_messages (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, complaint_id BIGINT UNSIGNED NOT NULL,
+ user_id BIGINT UNSIGNED NOT NULL, message TEXT NOT NULL, created_at TIMESTAMP NULL, updated_at TIMESTAMP NULL,
+ FOREIGN KEY(complaint_id) REFERENCES complaints(id), FOREIGN KEY(user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+UPDATE offers SET withheld_g = stock_g WHERE EXISTS (SELECT 1 FROM orders WHERE orders.offer_id = offers.id AND orders.stock_state = 'released');
+INSERT INTO migrations (migration,batch) VALUES ('2026_11_22_000002_align_srs_workflows',2);

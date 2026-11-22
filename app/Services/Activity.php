@@ -7,7 +7,8 @@ class Activity
 {
     public static function audit(Model $model, string $action, array $before = [], ?string $reason = null): void
     {
-        $safe = ['status', 'payment_status', 'stock_state', 'stock_g', 'reserved_g', 'sold_g', 'price_per_kg', 'minimum_price', 'quantity_g', 'received_g', 'total_idr', 'pickup_starts_at', 'pickup_ends_at', 'proposed_pickup', 'response', 'amount_idr', 'reference', 'active', 'kg_co2e_per_kg', 'source', 'version', 'method', 'assumptions', 'closes_at', 'condition'];
+        $safe = ['status', 'payment_status', 'stock_state', 'stock_g', 'reserved_g', 'sold_g', 'withheld_g', 'price_per_kg', 'minimum_price', 'quantity_g', 'received_g', 'total_idr', 'pickup_starts_at', 'pickup_ends_at', 'starts_at', 'ends_at', 'proposed_pickup', 'buyer_confirmed_at', 'resolution_agreement', 'response', 'amount_idr', 'reference', 'active', 'kg_co2e_per_kg', 'estimated_co2e_kg', 'factor_snapshot', 'unit', 'source', 'version', 'method', 'method_code', 'assumptions', 'valid_from', 'valid_until', 'closes_at', 'condition', 'type', 'message'];
+        $safe[] = 'moderated_at';
         AuditLog::create(['actor_id' => auth()->id(), 'action' => $action, 'subject_type' => $model->getMorphClass(), 'subject_id' => $model->id, 'before' => array_intersect_key($before, array_flip($safe)), 'after' => array_intersect_key($model->getAttributes(), array_flip($safe)), 'reason' => $reason]);
     }
     public static function notify(int $user, string $title, string $link, ?string $key = null): void

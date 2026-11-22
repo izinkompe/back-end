@@ -16,11 +16,11 @@ Checkout membuat order + reservasi + record payment. Pembeli meminta endpoint pa
 
 Notifikasi diverifikasi dengan SHA-512 dari gabungan `order_id`, `status_code`, `gross_amount`, Server Key. Selanjutnya backend mengambil status terkini melalui Get Status API dengan Basic Auth Server Key, mencocokkan order ID dan nominal. Webhook yang duplikat/terlambat tidak memercayai status kiriman lama.
 
-- `settlement` → paid.
+- `settlement` â†’ paid.
 - `capture` hanya menjadi paid jika `fraud_status=accept`.
 - `pending` atau challenge tidak menjadi paid.
-- `deny`, `cancel`, `expire` terkonfirmasi → batal dan pelepasan stok tepat sekali jika belum paid.
-- `refund`, `partial_refund`, chargeback → dicatat; transaksi belum selesai masuk penanganan admin.
+- `deny`, `cancel`, `expire` terkonfirmasi â†’ batal dan pelepasan stok tepat sekali jika belum paid.
+- `refund`, `partial_refund`, chargeback â†’ dicatat; transaksi belum selesai masuk penanganan admin.
 
 Frontend `onSuccess`, URL finish, dan screenshot pembeli tidak dapat menetapkan paid. Tidak ada verifikasi transfer manual pada implementasi ini.
 
@@ -42,3 +42,6 @@ Jika payment `uncertain`/`initiating` tidak pulih:
 Refund dilakukan melalui fasilitas Midtrans Dashboard/kanal operasional merchant sesuai metode yang tersedia. API admin mencatat nominal, alasan, status, reference dan bukti; tidak memanggil API refund otomatis. Endpoint cancel-payment juga bukan refund untuk transaksi paid.
 
 Dana masuk ke merchant Midtrans yang terdaftar. Backend tidak membagi dana atau mentransfer payout ke rekening petani. Model komisi, payout, biaya Midtrans dan rekonsiliasi merchant perlu ditetapkan pemilik produk sebelum penggunaan nyata. Total checkout saat ini hanya harga hasil panen, tanpa ongkir/komisi tambahan.
+
+
+Setelah reservasi dilepas, berat terkait ditahan di withheld_g sampai petani menyatakan masih layak dijual (BR-06). Konfirmasi payment bukan konfirmasi penerimaan: buyer_confirmed_at tetap harus berasal dari pembeli sebelum admin dapat menyelesaikan masalah berat. Refund completed memerlukan reference dan evidence privat yang sudah diunggah pada record requested/processing.

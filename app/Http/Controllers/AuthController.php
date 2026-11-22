@@ -12,6 +12,7 @@ class AuthController
     {
         $v = $r->validate(['name' => 'required|string|max:150', 'email' => 'required|email|max:255|unique:users,email', 'password' => ['required', 'confirmed', PasswordRule::min(8)->letters()->numbers()], 'role' => 'required|in:farmer,buyer', 'phone' => 'nullable|string|max:30', 'organization' => 'nullable|string|max:255']);
         $user = User::create($v);
+        $user->sendEmailVerificationNotification();
         return response()->json($this->session($user), 201);
     }
     public function login(Request $r)
@@ -25,7 +26,8 @@ class AuthController
     public function logout(Request $r) { $r->user()->currentAccessToken()?->delete(); return response()->noContent(); }
     public function forgot(Request $r)
     {
-        $v = $r->validate(['email' => 'required|email']); Password::sendResetLink($v);
+        $v = $r->validate(['email' => 'required|email']);
+        if (User::where('email', $v['email'])->whereNotNull('email_verified_at')->exists()) { Password::sendResetLink($v); }
         return ['message' => 'Jika akun terdaftar, tautan reset telah dikirim.'];
     }
     public function reset(Request $r)
@@ -34,5 +36,14 @@ class AuthController
         $status = Password::reset($v, function (User $user, string $password) { $user->forceFill(['password' => $password, 'remember_token' => \Illuminate\Support\Str::random(60)])->save(); $user->tokens()->delete(); });
         if ($status !== Password::PASSWORD_RESET) { throw ValidationException::withMessages(['token' => 'Token reset tidak valid atau kedaluwarsa.']); }
         return ['message' => 'Kata sandi telah diubah.'];
+    }
+    public function verificationNotice(Request $r)
+    {
+        if (!$r->user()->hasVerifiedEmail()) { $r->user()->sendEmailVerificationNotification(); }
+        return ['message' => 'Jika email belum terverifikasi, tautan verifikasi telah dikirim.'];
+    }
+    public function verify(\Illuminate\Foundation\Auth\EmailVerificationRequest $r)
+    {
+        $r->fulfill(); return ['message' => 'Email berhasil diverifikasi.'];
     }
 }

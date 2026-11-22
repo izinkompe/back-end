@@ -11,7 +11,7 @@ class Reminders
     }
     public static function forOffer(Offer $offer): void
     {
-        $ids = Favorite::where(fn ($q) => $q->where(fn ($f) => $f->where('kind', 'farmer')->where('value', (string) $offer->farmer_id))->orWhere(fn ($f) => $f->where('kind', 'commodity')->where('value', mb_strtolower($offer->name))))->pluck('user_id');
+        $ids = Favorite::where(fn ($q) => $q->where(fn ($f) => $f->where('kind', 'farmer')->where('value', (string) $offer->farmer_id))->orWhere(fn ($f) => $f->where('kind', 'commodity')->where('value', mb_strtolower($offer->commodity ?? $offer->name))))->pluck('user_id');
         foreach (User::whereIn('id', $ids)->cursor() as $user) {
             $p = $user->preferences ?? [];
             if (!($p['reminders'] ?? false)) { continue; }

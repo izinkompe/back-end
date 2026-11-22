@@ -45,7 +45,7 @@ class CommunityController
         $offer = Offer::where('farmer_id', $r->user()->id)->findOrFail($v['offer_id']);
         abort_unless($offer->effective_status === 'active', 409, 'Penawaran tidak aktif.');
         PickupSlot::where('offer_id', $offer->id)->where('active', true)->where('starts_at', '>', now())->findOrFail($v['pickup_slot_id']);
-        $grams = Pricing::grams($v['quantity_kg']); abort_if($grams > $offer->stock_g - $offer->reserved_g, 409, 'Stok tidak cukup.');
+        $grams = Pricing::grams($v['quantity_kg']); abort_if($grams > $offer->available_g, 409, 'Stok tidak cukup.');
         return NeedResponse::create(collect($v)->except('quantity_kg')->all() + ['food_need_id' => $need->id, 'farmer_id' => $r->user()->id, 'quantity_g' => $grams, 'price_per_kg' => $offer->current_price]);
     }
     public function select(Request $r, FoodNeed $need, NeedResponse $response)
@@ -53,6 +53,8 @@ class CommunityController
         abort_unless($need->buyer_id === $r->user()->id && $response->food_need_id === $need->id, 403);
         abort_unless($need->status === 'active' && $need->needed_at->isFuture(), 409);
         $offer = Offer::findOrFail($response->offer_id); abort_unless($offer->effective_status === 'active', 409);
+        abort_if($response->quantity_g > $offer->available_g, 409, 'Stok tanggapan tidak lagi tersedia.');
+        PickupSlot::where('offer_id', $offer->id)->where('active', true)->where('starts_at', '>', now())->findOrFail($response->pickup_slot_id);
         // Selection only prepares checkout. The normal POST /orders performs all current checks.
         return ['checkout' => ['offer_id' => $offer->id, 'pickup_slot_id' => $response->pickup_slot_id, 'quantity_kg' => number_format($response->quantity_g / 1000, 3, '.', ''), 'expected_price_per_kg' => $offer->current_price], 'quoted_price_per_kg' => $response->price_per_kg];
     }

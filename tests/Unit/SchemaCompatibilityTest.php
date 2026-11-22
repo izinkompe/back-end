@@ -6,6 +6,7 @@ use Illuminate\Database\MySqlConnection;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Facade;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\TestCase;
 
 class SchemaCompatibilityTest extends TestCase
@@ -18,6 +19,7 @@ class SchemaCompatibilityTest extends TestCase
         }, 'schema_test', '', ['driver' => 'mysql', 'charset' => 'utf8mb4', 'collation' => 'utf8mb4_unicode_ci', 'engine' => 'InnoDB']) extends MySqlConnection {
             public function isMaria() { return true; }
             public function getServerVersion(): string { return '10.4.32'; }
+            public function logQuery($query, $bindings, $time = null) {} // No PDO quoting while compiling SQL only.
         };
         $connection->useDefaultSchemaGrammar();
         $collector = new class($connection) {
@@ -30,14 +32,23 @@ class SchemaCompatibilityTest extends TestCase
                 $callback($blueprint);
                 $this->sql[$table] = implode(";\n", $blueprint->toSql());
             }
+            public function table(string $table, \Closure $callback): void
+            {
+                $blueprint = new Blueprint($this->connection, $table);
+                $callback($blueprint);
+                $this->sql[$table] .= ";\n".implode(";\n", $blueprint->toSql());
+            }
         };
         $previous = Facade::getFacadeApplication();
         Facade::setFacadeApplication(new Container);
         Schema::swap($collector);
+        DB::swap($connection);
         try {
             $migration = require __DIR__.'/../../database/migrations/2026_11_22_000001_create_pangantani_tables.php';
             $migration->up();
-            $this->assertCount(21, $collector->sql);
+            $upgrade = require __DIR__.'/../../database/migrations/2026_11_22_000002_align_srs_workflows.php';
+            $connection->pretend(fn () => $upgrade->up());
+            $this->assertCount(23, $collector->sql);
             foreach ($collector->sql as $sql) {
                 $this->assertDoesNotMatchRegularExpression('/`[^`]+` timestamp(?:\(\d+\))? not null/i', $sql);
             }
@@ -53,6 +64,7 @@ class SchemaCompatibilityTest extends TestCase
             $this->assertDoesNotMatchRegularExpression('/\bTIMESTAMP NOT NULL\b/i', $reference);
         } finally {
             Facade::clearResolvedInstance('db.schema');
+            Facade::clearResolvedInstance('db');
             Facade::setFacadeApplication($previous);
         }
     }

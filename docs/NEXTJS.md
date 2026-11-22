@@ -38,7 +38,7 @@ Dokumen ini menjelaskan frontend yang perlu dibangun terpisah. Tidak ada source 
 
 ## Umpan balik dan waktu
 
-- Gunakan `cache: no-store` untuk permintaan stok/harga/order dan polling paling lama setiap 15–30 detik saat halaman aktif. Hentikan polling ketika halaman tidak terlihat atau status final.
+- Gunakan `cache: no-store` untuk permintaan stok/harga/order dan polling paling lama setiap 15Ã¢â‚¬â€œ30 detik saat halaman aktif. Hentikan polling ketika halaman tidak terlihat atau status final.
 - Saat jaringan terputus, pulihkan order menggunakan retry checkout dengan key yang sama atau GET /orders; jangan langsung menampilkan kegagalan yang mendorong checkout baru.
 - Format uang dengan IDR tanpa pecahan. Ubah gram ke kg dengan tiga desimal. Gunakan Asia/Jakarta saat menampilkan timestamp.
 - Field validation 422 ditampilkan pada field yang sesuai. Status harus mempunyai teks, bukan hanya warna.
@@ -48,3 +48,17 @@ Dokumen ini menjelaskan frontend yang perlu dibangun terpisah. Tidak ada source 
 - Jika layanan peta gagal, tetap tampilkan katalog. Jarak berlabel garis lurus; koordinat marker publik dibulatkan untuk menjaga kerahasiaan lokasi persis. Detail alamat tersedia bagi pihak order.
 
 Frontend perlu menyediakan halaman reset-password yang membaca query email/token lalu mengirim password+confirmation ke API. Sharing tautan, clipboard, tampilan aksesibilitas dan geolokasi memerlukan implementasi browser/Next.js.
+
+
+## Penyesuaian setelah revisi SRS
+
+- Implementasikan /verify-email. Ambil verification_url dari query email, lalu panggil URL signed dengan Bearer token akun terkait melalui BFF. URL harus berasal dari host backend tepercaya yang dikonfigurasi; jangan menjadikan BFF proxy URL bebas. Saat signed URL tidak valid/kedaluwarsa, pengguna dapat meminta kirim ulang verifikasi.
+- PATCH /me mendukung email + current_password; verifikasi ulang email baru diperlukan. Preferensi yang disimpan dapat dibaca kembali melalui /me.
+- Tampilkan available_g/available_kg, withheld_g dan shortage_g secara jelas pada dashboard petani. Koreksi kekurangan stok membuka masalah otomatis; confirm-resale adalah deklarasi petani setelah pemeriksaan fisik, bukan tombol admin.
+- Form admin complete memerlukan reason, agreement, buyer_agreed=true dan konfirmasi penerimaan nyata dari pembeli. Untuk masalah yang belum selesai, pembeli tetap dapat mengirim received_kg pada order issue yang pembayaran sudah terkonfirmasi; keputusan akhir tetap oleh admin.
+- Sediakan thread klarifikasi pengaduan dengan type/status, messages dan bukti privat.
+- Form refund: requested/processing â†’ upload bukti â†’ completed dengan reference.
+- Form koreksi laporan admin menggunakan expected_received_kg dan Idempotency-Key. Pada 409 muat ulang berat terbaru; jangan menimpa otomatis.
+- Export CSV dapat memilih scope distribution atau orders; tampilan laporan tetap memakai berat diterima.
+
+Petani perlu melihat moderated_at/moderation_reason dari daftar penawaran sendiri. Jika diblokir admin, tampilkan status peninjauan dan jangan menawarkan publish sampai release-moderation oleh admin; validasi server tetap wajib.

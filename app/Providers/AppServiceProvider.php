@@ -1,0 +1,19 @@
+<?php
+namespace App\Providers;
+
+use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Auth\Notifications\ResetPassword;
+
+class AppServiceProvider extends ServiceProvider
+{
+    public function register(): void {}
+
+    public function boot(): void
+    {
+        RateLimiter::for('api', fn ($r) => Limit::perMinute(120)->by($r->user()?->id ?: $r->ip()));
+        RateLimiter::for('auth', fn ($r) => Limit::perMinute(5)->by($r->ip()));
+        ResetPassword::createUrlUsing(fn ($user, string $token) => config('pangantani.frontend_url').'/reset-password?'.http_build_query(['token' => $token, 'email' => $user->email]));
+    }
+}

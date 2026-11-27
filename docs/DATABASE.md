@@ -2,6 +2,8 @@
 
 Migration merupakan sumber utama skema; `database/sql/schema.mysql.sql` menyediakan DDL setara untuk pemeriksaan/import alternatif. Database aplikasi menggunakan MySQL/MariaDB dengan InnoDB. SQLite in-memory hanya untuk pengujian fitur yang tidak membuktikan penguncian InnoDB.
 
+Migration `2026_11_27_000001` menambahkan `auth_otps` untuk menyimpan hash kode verifikasi dan reset password beserta masa berlaku serta jumlah percobaan.
+
 ## Relasi
 
 | Tabel | Fungsi |

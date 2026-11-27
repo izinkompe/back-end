@@ -14,6 +14,12 @@ CREATE TABLE users (
 CREATE TABLE password_reset_tokens (
  email VARCHAR(255) PRIMARY KEY, token VARCHAR(255) NOT NULL, created_at TIMESTAMP NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE auth_otps (
+ user_id BIGINT UNSIGNED NOT NULL, purpose VARCHAR(20) NOT NULL, email VARCHAR(255) NOT NULL,
+ code VARCHAR(255) NOT NULL, attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+ created_at DATETIME NOT NULL, expires_at DATETIME NOT NULL,
+ PRIMARY KEY (user_id, purpose), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE personal_access_tokens (
  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, tokenable_type VARCHAR(255) NOT NULL,
  tokenable_id BIGINT UNSIGNED NOT NULL, name VARCHAR(255) NOT NULL, token VARCHAR(64) NOT NULL UNIQUE,
@@ -170,3 +176,4 @@ CREATE TABLE complaint_messages (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 UPDATE offers SET withheld_g = stock_g WHERE EXISTS (SELECT 1 FROM orders WHERE orders.offer_id = offers.id AND orders.stock_state = 'released');
 INSERT INTO migrations (migration,batch) VALUES ('2026_11_22_000002_align_srs_workflows',2);
+INSERT INTO migrations (migration,batch) VALUES ('2026_11_27_000001_create_auth_otps_table',3);

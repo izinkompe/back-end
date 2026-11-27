@@ -46,6 +46,7 @@ class MysqlTransactionConcurrencyTest extends TestCase
         $this->buyer2 = User::create(['name' => 'Pembeli 2', 'email' => 'b2@mysql.test', 'role' => 'buyer', 'password' => 'Password123']);
         $this->farmer = User::create(['name' => 'Petani', 'email' => 'farmer@mysql.test', 'role' => 'farmer', 'password' => 'Password123']);
         $this->admin = User::create(['name' => 'Admin', 'email' => 'admin@mysql.test', 'role' => 'admin', 'password' => 'Password123']);
+        foreach ([$this->buyer1, $this->buyer2, $this->farmer, $this->admin] as $user) { $user->forceFill(['email_verified_at' => now()])->save(); }
         $cat = Category::create(['name' => 'Sayuran']);
         EmissionFactor::create(['category_id' => $cat->id, 'kg_co2e_per_kg' => 2, 'source' => 'Uji MySQL', 'version' => '1', 'method' => 'Berat x faktor', 'assumptions' => 'Uji']);
         $addr = Address::create(['user_id' => $this->farmer->id, 'label' => 'Kebun', 'address' => 'Bogor', 'area' => 'Bogor', 'latitude' => -6.5, 'longitude' => 106.8]);

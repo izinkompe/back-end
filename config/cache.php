@@ -1,2 +1,10 @@
 <?php
-return ['default' => env('CACHE_STORE', 'file'), 'stores' => ['file' => ['driver' => 'file', 'path' => storage_path('framework/cache/data'), 'lock_path' => storage_path('framework/cache/data')], 'array' => ['driver' => 'array', 'serialize' => false]], 'prefix' => 'pangantani_cache_'];
+return [
+    'default' => env('CACHE_STORE', 'file'),
+    'stores' => [
+        'file' => ['driver' => 'file', 'path' => storage_path('framework/cache/data'), 'lock_path' => storage_path('framework/cache/data')],
+        'array' => ['driver' => 'array', 'serialize' => false],
+        'redis' => ['driver' => 'redis', 'connection' => 'cache', 'lock_connection' => 'cache'],
+    ],
+    'prefix' => env('CACHE_PREFIX', 'pangantani_cache_'),
+];

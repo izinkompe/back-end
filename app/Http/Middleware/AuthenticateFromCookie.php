@@ -16,6 +16,10 @@ class AuthenticateFromCookie
     {
         $token = $request->cookie(AuthCookie::name());
 
+        if ($request->isMethod('POST') && $request->is('api/v1/auth/login', 'api/v1/auth/register')) {
+            abort_unless($this->fromTrustedOrigin($request), 403, 'Origin tidak diizinkan untuk autentikasi cookie.');
+        }
+
         // Header Authorization eksplisit (Postman, BFF, mobile) selalu diutamakan.
         if ($request->bearerToken() || !is_string($token) || $token === '') {
             return $next($request);

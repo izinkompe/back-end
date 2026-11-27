@@ -38,7 +38,21 @@ class CookieAuthTest extends TestCase
         $this->login();
         $this->postJson('/api/v1/auth/register', ['name' => 'Baru', 'email' => 'baru@pangantani.test', 'password' => 'Password123', 'password_confirmation' => 'Password123', 'role' => 'farmer'])
             ->assertCreated()
+            ->assertJsonPath('user.role', 'farmer')
             ->assertCookie(self::COOKIE, null, false);
+    }
+
+    public function test_registration_defaults_to_buyer_and_rejects_invalid_roles(): void
+    {
+        $payload = ['name' => 'Baru', 'email' => 'baru@pangantani.test', 'password' => 'Password123', 'password_confirmation' => 'Password123'];
+        $this->postJson('/api/v1/auth/register', $payload)->assertCreated()->assertJsonPath('user.role', 'buyer');
+        $this->assertDatabaseHas('users', ['email' => $payload['email'], 'role' => 'buyer']);
+
+        $payload['email'] = 'lain@pangantani.test';
+        foreach (['admin', '', null] as $role) {
+            $this->postJson('/api/v1/auth/register', $payload + ['role' => $role])->assertUnprocessable()->assertJsonValidationErrors('role');
+        }
+        $this->assertDatabaseMissing('users', ['email' => $payload['email']]);
     }
 
     public function test_cookie_alone_authenticates_protected_endpoints(): void
@@ -54,6 +68,39 @@ class CookieAuthTest extends TestCase
     public function test_requests_without_cookie_or_bearer_are_rejected(): void
     {
         $this->getJson('/api/v1/me')->assertUnauthorized();
+    }
+
+    public function test_login_and_registration_reject_untrusted_origins_without_a_cookie(): void
+    {
+        $this->withHeader('Origin', 'https://situs-jahat.test')
+            ->postJson('/api/v1/auth/login', ['email' => 'cookie@pangantani.test', 'password' => 'Password123'])
+            ->assertForbidden();
+        $this->withHeader('Origin', 'https://situs-jahat.test')
+            ->postJson('/api/v1/auth/register', ['name' => 'Baru', 'email' => 'baru@pangantani.test', 'password' => 'Password123', 'password_confirmation' => 'Password123', 'role' => 'buyer'])
+            ->assertForbidden();
+        $this->assertSame(0, User::first()->tokens()->count());
+        $this->assertDatabaseMissing('users', ['email' => 'baru@pangantani.test']);
+    }
+
+    public function test_login_accepts_trusted_origin_and_rejects_cross_site_fetch_without_origin(): void
+    {
+        $credentials = ['email' => 'cookie@pangantani.test', 'password' => 'Password123'];
+        $this->withHeader('Origin', self::FRONTEND)->postJson('/api/v1/auth/login', $credentials)->assertOk();
+        $this->flushHeaders();
+        $this->withHeader('Sec-Fetch-Site', 'cross-site')->postJson('/api/v1/auth/login', $credentials)->assertForbidden();
+        $this->assertSame(1, User::first()->tokens()->count());
+    }
+
+    public function test_login_rate_limit_applies_to_the_same_account_from_different_ips(): void
+    {
+        for ($i = 1; $i <= 10; $i++) {
+            $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.'.$i])
+                ->postJson('/api/v1/auth/login', ['email' => 'cookie@pangantani.test', 'password' => 'wrong'])
+                ->assertUnprocessable();
+        }
+        $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.11'])
+            ->postJson('/api/v1/auth/login', ['email' => 'COOKIE@PANGANTANI.TEST', 'password' => 'wrong'])
+            ->assertTooManyRequests();
     }
 
     public function test_state_changes_with_cookie_reject_untrusted_browser_origins(): void

@@ -23,6 +23,7 @@ class SrsComplianceTest extends TestCase
         $this->buyer = User::create(['name' => 'Pembeli', 'email' => 'buyer@srs.test', 'role' => 'buyer', 'password' => 'Password123']);
         $this->farmer = User::create(['name' => 'Petani', 'email' => 'farmer@srs.test', 'role' => 'farmer', 'password' => 'Password123']);
         $this->admin = User::create(['name' => 'Admin', 'email' => 'admin@srs.test', 'role' => 'admin', 'password' => 'Password123']);
+        foreach ([$this->buyer, $this->farmer, $this->admin] as $user) { $user->forceFill(['email_verified_at' => now()])->save(); }
         $category = Category::create(['name' => 'Sayuran']);
         $address = Address::create(['user_id' => $this->farmer->id, 'label' => 'Kebun', 'address' => 'Alamat privat', 'area' => 'Bogor', 'latitude' => -6.5, 'longitude' => 106.8]);
         $this->offer = Offer::create(['farmer_id' => $this->farmer->id, 'category_id' => $category->id, 'address_id' => $address->id, 'name' => 'Bayam surplus', 'commodity' => 'Bayam', 'condition' => 'Baik', 'stock_g' => 10000, 'minimum_price' => 5000, 'price_per_kg' => 10000, 'closes_at' => now()->addHours(2), 'status' => 'active', 'area' => 'Bogor', 'latitude' => -6.5, 'longitude' => 106.8]);
@@ -112,24 +113,41 @@ class SrsComplianceTest extends TestCase
     }
     public function test_unverified_email_cannot_receive_password_reset_but_can_be_verified(): void
     {
+        $this->buyer->forceFill(['email_verified_at' => null])->save();
         $this->postJson('/api/v1/auth/forgot-password', ['email' => $this->buyer->email])->assertOk();
         Notification::assertNothingSent();
         $url = URL::temporarySignedRoute('verification.verify', now()->addMinutes(60), ['id' => $this->buyer->id, 'hash' => sha1($this->buyer->email)]);
         $this->getJson($url)->assertOk(); $this->assertNotNull($this->buyer->fresh()->email_verified_at);
+        \Illuminate\Support\Facades\Mail::shouldReceive('raw')->once();
         $this->postJson('/api/v1/auth/forgot-password', ['email' => $this->buyer->email])->assertOk();
-        Notification::assertSentTo($this->buyer, \Illuminate\Auth\Notifications\ResetPassword::class);
+        Notification::assertNothingSent();
     }
     public function test_email_changes_require_password_and_clear_verification(): void
     {
         $this->buyer->forceFill(['email_verified_at' => now()])->save();
         $this->patchJson('/api/v1/me', ['email' => 'new@srs.test', 'current_password' => 'wrong'])->assertUnprocessable();
         $this->patchJson('/api/v1/me', ['email' => 'new@srs.test', 'current_password' => 'Password123'])->assertOk()->assertJsonPath('email', 'new@srs.test')->assertJsonPath('email_verified_at', null);
+        $this->getJson('/api/v1/orders')->assertForbidden();
+        $this->getJson('/api/v1/me')->assertOk()->assertJsonPath('user.email', 'new@srs.test');
     }
     public function test_draft_can_be_incomplete_and_cannot_be_published_early(): void
     {
         Sanctum::actingAs($this->farmer); $draft = $this->postJson('/api/v1/farmer/offers', ['name' => 'Draf', 'slots' => []])->assertCreated()->json('id');
         $this->postJson('/api/v1/farmer/offers/'.$draft.'/publish')->assertForbidden();
         $this->assertDatabaseHas('offers', ['id' => $draft, 'status' => 'draft', 'stock_g' => 0]);
+    }
+
+    public function test_unverified_users_cannot_access_private_media_or_drafts(): void
+    {
+        $this->farmer->forceFill(['email_verified_at' => null])->save();
+        Sanctum::actingAs($this->farmer);
+        $this->offer->update(['status' => 'draft']);
+        $photo = Media::create(['user_id' => $this->farmer->id, 'attachable_type' => Offer::class, 'attachable_id' => $this->offer->id, 'kind' => 'offer_photo', 'path' => 'photo.png', 'mime' => 'image/png', 'size' => 100]);
+        $evidence = Media::create(['user_id' => $this->farmer->id, 'attachable_type' => Offer::class, 'attachable_id' => $this->offer->id, 'kind' => 'verification', 'path' => 'evidence.png', 'mime' => 'image/png', 'size' => 100]);
+
+        $this->getJson('/api/v1/offers/'.$this->offer->id)->assertNotFound();
+        $this->getJson('/api/v1/media/'.$photo->id)->assertNotFound();
+        $this->getJson('/api/v1/media/'.$evidence->id)->assertForbidden();
     }
     public function test_catalog_has_empty_state_and_filters_effective_price_and_stock(): void
     {
@@ -315,6 +333,47 @@ class SrsComplianceTest extends TestCase
         $fake = \Illuminate\Http\UploadedFile::fake()->createWithContent('photo.png', '<html>not an image</html>');
         $this->post('/api/v1/media', ['kind' => 'offer_photo', 'target_id' => $this->offer->id, 'file' => $fake], ['Accept' => 'application/json'])->assertUnprocessable();
         $this->assertSame(0, Media::count());
+    }
+
+    public function test_uploads_use_object_storage_and_legacy_media_remains_local(): void
+    {
+        $contents = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aVS0AAAAASUVORK5CYII=');
+        $handler = new \Aws\MockHandler([
+            new \Aws\Result([]),
+            new \Aws\Result(['Body' => \GuzzleHttp\Psr7\Utils::streamFor($contents)]),
+        ]);
+        $config = ['driver' => 's3', 'key' => 'test-key', 'secret' => 'test-secret', 'region' => 'auto', 'bucket' => 'private-test', 'endpoint' => 'https://example.test', 'handler' => $handler, 'throw' => true];
+        config(['filesystems.default' => 'object_test', 'filesystems.disks.object_test' => $config]);
+        \Illuminate\Support\Facades\Storage::set('object_test', \Illuminate\Support\Facades\Storage::build($config));
+        \Illuminate\Support\Facades\Storage::fake('local');
+        Sanctum::actingAs($this->farmer);
+
+        $response = $this->post('/api/v1/media', ['kind' => 'offer_photo', 'target_id' => $this->offer->id, 'file' => \Illuminate\Http\UploadedFile::fake()->createWithContent('photo.png', $contents)], ['Accept' => 'application/json'])->assertCreated();
+        $response->assertJsonMissingPath('disk');
+        $media = Media::findOrFail($response->json('id'));
+        $this->assertSame('object_test', $media->disk);
+        $this->assertSame('PutObject', $handler->getLastCommand()->getName());
+        $this->assertFalse($handler->getLastRequest()->hasHeader('x-amz-acl'));
+        $this->get('/api/v1/media/'.$media->id)->assertOk()->assertStreamedContent($contents);
+
+        \Illuminate\Support\Facades\Storage::disk('local')->put('legacy.png', $contents);
+        $legacy = Media::create(['user_id' => $this->farmer->id, 'attachable_type' => Offer::class, 'attachable_id' => $this->offer->id, 'kind' => 'offer_photo', 'path' => 'legacy.png', 'mime' => 'image/png', 'size' => strlen($contents)]);
+        $this->get('/api/v1/media/'.$legacy->id)->assertOk()->assertStreamedContent($contents);
+    }
+
+    public function test_failed_media_record_creation_removes_the_uploaded_file(): void
+    {
+        config(['filesystems.default' => 'upload_test']);
+        $disk = \Illuminate\Support\Facades\Storage::fake('upload_test');
+        Sanctum::actingAs($this->farmer);
+        Media::creating(function () { throw new \RuntimeException('Simulasi kegagalan database'); });
+        try {
+            $file = \Illuminate\Http\UploadedFile::fake()->createWithContent('photo.png', base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aVS0AAAAASUVORK5CYII='));
+            $this->post('/api/v1/media', ['kind' => 'offer_photo', 'target_id' => $this->offer->id, 'file' => $file], ['Accept' => 'application/json'])->assertStatus(500);
+            $this->assertSame([], $disk->allFiles('uploads'));
+        } finally {
+            Media::flushEventListeners();
+        }
     }
     public function test_active_order_schedule_change_includes_awaiting_payment_and_preserves_rules(): void
     {

@@ -5,12 +5,12 @@ abstract class TestCase extends \Illuminate\Foundation\Testing\TestCase
     public function createApplication()
     {
         // Test setup must never run RefreshDatabase against the owner's MySQL database.
-        foreach (['APP_ENV' => 'testing', 'DB_CONNECTION' => 'sqlite', 'DB_DATABASE' => ':memory:', 'CACHE_STORE' => 'array', 'MAIL_MAILER' => 'array', 'MIDTRANS_SERVER_KEY' => 'test-server-key', 'MIDTRANS_IS_PRODUCTION' => 'false', 'APP_KEY' => 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='] as $name => $value) {
+        foreach (['APP_ENV' => 'testing', 'DB_CONNECTION' => 'sqlite', 'DB_DATABASE' => ':memory:', 'CACHE_STORE' => 'array', 'FILESYSTEM_DISK' => 'local', 'MAIL_MAILER' => 'array', 'MIDTRANS_SERVER_KEY' => 'test-server-key', 'MIDTRANS_IS_PRODUCTION' => 'false', 'APP_KEY' => 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='] as $name => $value) {
             putenv($name.'='.$value); $_ENV[$name] = $_SERVER[$name] = $value;
         }
         $app = parent::createApplication();
-        if ($app->configurationIsCached() || config('database.default') !== 'sqlite' || config('database.connections.sqlite.database') !== ':memory:') {
-            throw new \LogicException('Pengujian hanya diizinkan pada SQLite :memory: tanpa config cache.');
+        if ($app->configurationIsCached() || config('database.default') !== 'sqlite' || config('database.connections.sqlite.database') !== ':memory:' || config('filesystems.default') !== 'local') {
+            throw new \LogicException('Pengujian hanya diizinkan pada SQLite :memory: dan disk lokal tanpa config cache.');
         }
         // Some Windows SQLite builds omit trig functions that MySQL provides natively.
         $pdo = $app['db']->connection()->getPdo();

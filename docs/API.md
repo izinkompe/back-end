@@ -11,7 +11,7 @@ Semua ID adalah angka. Berat input disarankan string kilogram, contoh `"1.250"`.
 | HTTP | Arti |
 |---|---|
 | 401 | Token tidak ada/tidak valid/kedaluwarsa |
-| 403 | Peran atau kepemilikan tidak diizinkan, signature tidak valid |
+| 403 | Email belum diverifikasi, peran atau kepemilikan tidak diizinkan, atau signature tidak valid |
 | 404 | Objek tidak ditemukan, draf disembunyikan dari publik |
 | 409 | Konflik stok, harga berubah, status tidak memungkinkan, key berbeda payload |
 | 422 | Validasi, bentuk `{message, errors: {nama_field: [pesan]}}` |
@@ -25,11 +25,11 @@ Error koneksi gateway yang tidak tertangani mengembalikan error server dan dicat
 
 | Metode | Path | Akses dan input |
 |---|---|---|
-| POST | /auth/register | Publik: name, email, password, password_confirmation, role (buyer/farmer), phone?, organization? |
+| POST | /auth/register | Publik: name, email, password, password_confirmation, role? (buyer/farmer; default buyer), phone?, organization? |
 | POST | /auth/login | Publik: email, password |
 | POST | /auth/logout | Token: mencabut token sesi aktif |
-| POST | /auth/forgot-password | Publik: email; response netral agar email tidak mudah ditebak |
-| POST | /auth/reset-password | Publik: email, token, password, password_confirmation; mencabut seluruh token akun |
+| POST | /auth/forgot-password | Publik: email; kirim OTP reset dengan response netral |
+| POST | /auth/reset-password | Publik: email, token, password, password_confirmation; menerima token tautan reset yang sudah diterbitkan |
 | GET | /me | Token: `{user, addresses, verification}` |
 | PATCH | /me | Token: name?, phone?, organization?, preferences?, email? + current_password saat mengganti email |
 | POST | /addresses | Token: label, address, area, latitude, longitude, instructions? |
@@ -37,7 +37,7 @@ Error koneksi gateway yang tidak tertangani mengembalikan error server dan dicat
 | GET | /notifications | Pemilik: notifikasi berhalaman |
 | PATCH | /notifications/{id}/read | Pemilik: tanpa body |
 
-Register/login menghasilkan `{user, token, token_type: "Bearer", expires_in: 604800}` **dan** cookie HttpOnly `pangantani_token` (`Path=/`, `SameSite=Lax`, `Secure` di production, umur 7 hari). Endpoint terlindungi menerima cookie tersebut atau header `Authorization: Bearer <token>`; header Bearer diutamakan. Request POST/PUT/PATCH/DELETE yang hanya membawa cookie wajib memiliki header `Origin` yang terdaftar di `CORS_ALLOWED_ORIGINS`, selain itu 403. Logout mencabut token dan mengirim cookie kedaluwarsa. Password minimal delapan karakter dengan huruf dan angka. Email dapat diganti melalui PATCH /me dengan current_password. Perubahan menghapus status verifikasi, membatalkan token reset email lama dan sesi lain, lalu mengirim tautan verifikasi email baru. Reset password hanya dikirim ke email akun yang sudah diverifikasi.
+Register/login menghasilkan `{user, token, token_type: "Bearer", expires_in: 604800}` **dan** cookie HttpOnly `pangantani_token` (`Path=/`, `SameSite=Lax`, `Secure` di production, umur 7 hari). Email wajib diverifikasi untuk mengakses fitur akun. Sebelum verifikasi, token tetap dapat digunakan untuk GET/PATCH `/me`, pengiriman dan konfirmasi verifikasi, serta logout. Endpoint terlindungi menerima cookie tersebut atau header `Authorization: Bearer <token>`; header Bearer diutamakan. Request POST/PUT/PATCH/DELETE yang hanya membawa cookie wajib memiliki header `Origin` yang terdaftar di `CORS_ALLOWED_ORIGINS`, selain itu 403. Logout mencabut token dan mengirim cookie kedaluwarsa. Password minimal delapan karakter dengan huruf dan angka. Email dapat diganti melalui PATCH /me dengan current_password. Perubahan menghapus status verifikasi, membatalkan token reset email lama dan sesi lain, lalu mengirim OTP verifikasi ke email baru. OTP reset password hanya dikirim ke email akun yang sudah diverifikasi.
 
 Contoh preferensi:
 
@@ -182,10 +182,16 @@ Laporan menerima filter from, to, area, commodity. Komoditas pada laporan berasa
 
 | Metode | Path | Input/hasil |
 |---|---|---|
-| POST | /auth/email/verification-notification | Token akun: kirim ulang tautan, dibatasi rate limit |
-| GET | /auth/email/verify/{id}/{hash}?expires=...&signature=... | Token akun terkait dan URL signed valid, berlaku 60 menit |
+| POST | /auth/email/verification-notification | Token akun: kirim ulang OTP, dibatasi rate limit |
+| GET | /auth/email/verify/{id}/{hash}?expires=...&signature=... | Token akun terkait dan URL signed yang sudah diterbitkan |
+| POST | /auth/email/otp | Token akun: kirim kode verifikasi ke email akun |
+| POST | /auth/email/verify-otp | Token akun dan `code` enam digit |
+| POST | /auth/forgot-password/otp | `email` terverifikasi: kirim kode reset |
+| POST | /auth/reset-password/otp | `email`, `code`, `password`, `password_confirmation` |
 
-Registrasi mengirim tautan ke halaman Next.js /verify-email dengan query verification_url. Frontend meneruskan request GET ke URL signed itu dengan Bearer token akun yang sesuai; jangan mengubah urutan/nilai parameter atau host URL. Reset password hanya dikirim setelah email terverifikasi. Mode mail array adalah in-memory dan tidak mengirim email; gunakan SMTP/mailbox pengembangan agar pengguna bisa mengakses tautan. Token tidak ditulis ke log aplikasi.
+Kode berlaku 10 menit, sekali pakai, maksimal lima percobaan salah, dan pengiriman ulang untuk tujuan yang sama dibatasi satu menit per akun. Reset password mencabut seluruh token akses dan kode reset lain. Email wajib diverifikasi sebelum mengakses fitur akun dan menggunakan reset password.
+
+Registrasi mengirim OTP verifikasi. Frontend mengirim kode ke `/auth/email/verify-otp` dengan token akun. Untuk reset password, kirim email ke `/auth/forgot-password`, lalu kirim kode dan password baru ke `/auth/reset-password/otp`. Mode mail array adalah in-memory dan tidak mengirim email; gunakan SMTP/mailbox pengembangan untuk menerima kode.
 
 ## Klarifikasi pengaduan
 

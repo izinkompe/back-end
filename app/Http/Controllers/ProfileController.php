@@ -1,11 +1,13 @@
 <?php
 namespace App\Http\Controllers;
 use App\Models\{Address, FarmerVerification, Notice};
+use App\Services\AuthOtp;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ProfileController
 {
+    public function __construct(private AuthOtp $otp) {}
     public function show(Request $r) { return ['user' => $r->user(), 'addresses' => Address::where('user_id', $r->user()->id)->get(), 'verification' => FarmerVerification::where('user_id', $r->user()->id)->first()]; }
     public function update(Request $r)
     {
@@ -22,12 +24,13 @@ class ProfileController
                 // Recheck under the lock, then invalidate identity-linked credentials.
                 abort_unless(\Illuminate\Support\Facades\Hash::check($email['current_password'], $user->password), 422, 'Kata sandi saat ini tidak sesuai.');
                 DB::table('password_reset_tokens')->where('email', $user->email)->delete();
+                DB::table('auth_otps')->where('user_id', $user->id)->delete();
                 $user->email = $email['email']; $user->email_verified_at = null;
                 $user->tokens()->where('id', '!=', $r->user()->currentAccessToken()?->id)->delete();
             }
             $user->fill($v)->save();
             $r->user()->setRawAttributes($user->getAttributes(), true);
-            if ($changed) { DB::afterCommit(fn () => $user->sendEmailVerificationNotification()); }
+            if ($changed) { DB::afterCommit(fn () => $this->otp->send($user, 'verification')); }
             return $user;
         });
     }

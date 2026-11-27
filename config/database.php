@@ -6,4 +6,16 @@ return [
         'sqlite' => ['driver' => 'sqlite', 'database' => env('DB_DATABASE', database_path('database.sqlite')), 'prefix' => '', 'foreign_key_constraints' => true],
     ],
     'migrations' => ['table' => 'migrations', 'update_date_on_publish' => true],
+    'redis' => [
+        'client' => env('REDIS_CLIENT', 'predis'),
+        'options' => ['prefix' => env('REDIS_PREFIX', 'pangantani_redis_')],
+        'cache' => [
+            'url' => env('REDIS_URL'),
+            'host' => env('REDIS_HOST', '127.0.0.1'),
+            'username' => env('REDIS_USERNAME'),
+            'password' => env('REDIS_PASSWORD'),
+            'port' => env('REDIS_PORT', 6379),
+            'database' => env('REDIS_CACHE_DB', 0),
+        ],
+    ],
 ];

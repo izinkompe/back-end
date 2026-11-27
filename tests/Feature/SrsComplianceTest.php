@@ -118,8 +118,9 @@ class SrsComplianceTest extends TestCase
         Notification::assertNothingSent();
         $url = URL::temporarySignedRoute('verification.verify', now()->addMinutes(60), ['id' => $this->buyer->id, 'hash' => sha1($this->buyer->email)]);
         $this->getJson($url)->assertOk(); $this->assertNotNull($this->buyer->fresh()->email_verified_at);
+        \Illuminate\Support\Facades\Mail::shouldReceive('raw')->once();
         $this->postJson('/api/v1/auth/forgot-password', ['email' => $this->buyer->email])->assertOk();
-        Notification::assertSentTo($this->buyer, \Illuminate\Auth\Notifications\ResetPassword::class);
+        Notification::assertNothingSent();
     }
     public function test_email_changes_require_password_and_clear_verification(): void
     {

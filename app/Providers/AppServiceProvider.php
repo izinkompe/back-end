@@ -19,9 +19,5 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(10)->by(hash('sha256', is_string($email) ? mb_strtolower(trim($email)) : ''));
         });
         ResetPassword::createUrlUsing(fn ($user, string $token) => config('pangantani.frontend_url').'/reset-password?'.http_build_query(['token' => $token, 'email' => $user->email]));
-        \Illuminate\Auth\Notifications\VerifyEmail::createUrlUsing(function ($user) {
-            $signed = \Illuminate\Support\Facades\URL::temporarySignedRoute('verification.verify', now()->addMinutes(60), ['id' => $user->id, 'hash' => sha1($user->getEmailForVerification())]);
-            return config('pangantani.frontend_url').'/verify-email?'.http_build_query(['verification_url' => $signed]);
-        });
     }
 }

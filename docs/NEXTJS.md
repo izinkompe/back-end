@@ -51,14 +51,14 @@ Dokumen ini menjelaskan frontend yang perlu dibangun terpisah. Tidak ada source 
 - Bukti privat harus diambil lewat BFF/header Bearer dan respons tidak boleh dicache publik. Foto katalog dapat memakai URL media publik.
 - Jika layanan peta gagal, tetap tampilkan katalog. Jarak berlabel garis lurus; koordinat marker publik dibulatkan untuk menjaga kerahasiaan lokasi persis. Detail alamat tersedia bagi pihak order.
 
-Frontend perlu menyediakan halaman reset-password yang membaca query email/token lalu mengirim password+confirmation ke API. Sharing tautan, clipboard, tampilan aksesibilitas dan geolokasi memerlukan implementasi browser/Next.js.
+Frontend perlu menyediakan halaman reset-password untuk memasukkan email, kode OTP, password baru, dan konfirmasi password. Sharing tautan, clipboard, tampilan aksesibilitas dan geolokasi memerlukan implementasi browser/Next.js.
 
 Untuk alur OTP, panggil `POST /auth/email/otp` dan `POST /auth/email/verify-otp` dengan token akun, atau `POST /auth/forgot-password/otp` dan `POST /auth/reset-password/otp` untuk reset. Kode enam digit berlaku sepuluh menit. Kontrak payload tersedia di `docs/API.md`.
 
 
 ## Penyesuaian setelah revisi SRS
 
-- Implementasikan /verify-email. Ambil verification_url dari query email, lalu panggil URL signed dengan Bearer token akun terkait melalui BFF. URL harus berasal dari host backend tepercaya yang dikonfigurasi; jangan menjadikan BFF proxy URL bebas. Saat signed URL tidak valid/kedaluwarsa, pengguna dapat meminta kirim ulang verifikasi.
+- Implementasikan /verify-email untuk menerima enam digit OTP dan kirim kode ke `/auth/email/verify-otp` dengan token akun terkait. Pengguna dapat meminta kirim ulang OTP jika kode kedaluwarsa.
 - PATCH /me mendukung email + current_password; verifikasi ulang email baru diperlukan. Preferensi yang disimpan dapat dibaca kembali melalui /me.
 - Tampilkan available_g/available_kg, withheld_g dan shortage_g secara jelas pada dashboard petani. Koreksi kekurangan stok membuka masalah otomatis; confirm-resale adalah deklarasi petani setelah pemeriksaan fisik, bukan tombol admin.
 - Form admin complete memerlukan reason, agreement, buyer_agreed=true dan konfirmasi penerimaan nyata dari pembeli. Untuk masalah yang belum selesai, pembeli tetap dapat mengirim received_kg pada order issue yang pembayaran sudah terkonfirmasi; keputusan akhir tetap oleh admin.

@@ -12,13 +12,13 @@ Route::prefix('v1')->group(function () {
         Route::get('media/{media}', [MediaController::class, 'show']);
         Route::middleware('throttle:auth')->prefix('auth')->group(function () {
             Route::post('register', [AuthController::class, 'register']); Route::post('login', [AuthController::class, 'login'])->middleware('throttle:login-account');
-            Route::post('forgot-password', [AuthController::class, 'forgot']); Route::post('reset-password', [AuthController::class, 'reset']);
+            Route::post('forgot-password', [AuthOtpController::class, 'sendReset']); Route::post('reset-password', [AuthController::class, 'reset']);
             Route::post('forgot-password/otp', [AuthOtpController::class, 'sendReset']);
             Route::post('reset-password/otp', [AuthOtpController::class, 'reset']);
         });
         Route::middleware('auth:sanctum')->group(function () {
             Route::post('auth/logout', [AuthController::class, 'logout']);
-            Route::post('auth/email/verification-notification', [AuthController::class, 'verificationNotice'])->middleware('throttle:auth');
+            Route::post('auth/email/verification-notification', [AuthOtpController::class, 'sendVerification'])->middleware('throttle:auth');
             Route::post('auth/email/otp', [AuthOtpController::class, 'sendVerification'])->middleware('throttle:auth');
             Route::post('auth/email/verify-otp', [AuthOtpController::class, 'verify'])->middleware('throttle:auth');
             Route::get('auth/email/verify/{id}/{hash}', [AuthController::class, 'verify'])->middleware('signed')->name('verification.verify');

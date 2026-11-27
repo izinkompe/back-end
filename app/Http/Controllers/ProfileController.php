@@ -1,11 +1,13 @@
 <?php
 namespace App\Http\Controllers;
 use App\Models\{Address, FarmerVerification, Notice};
+use App\Services\AuthOtp;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ProfileController
 {
+    public function __construct(private AuthOtp $otp) {}
     public function show(Request $r) { return ['user' => $r->user(), 'addresses' => Address::where('user_id', $r->user()->id)->get(), 'verification' => FarmerVerification::where('user_id', $r->user()->id)->first()]; }
     public function update(Request $r)
     {
@@ -28,7 +30,7 @@ class ProfileController
             }
             $user->fill($v)->save();
             $r->user()->setRawAttributes($user->getAttributes(), true);
-            if ($changed) { DB::afterCommit(fn () => $user->sendEmailVerificationNotification()); }
+            if ($changed) { DB::afterCommit(fn () => $this->otp->send($user, 'verification')); }
             return $user;
         });
     }

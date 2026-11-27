@@ -1,9 +1,10 @@
 <?php
 namespace App\Http\Controllers;
 use App\Models\User;
+use App\Services\AuthOtp;
 use App\Support\AuthCookie;
 use Illuminate\Http\{JsonResponse, Request};
-use Illuminate\Support\Facades\{DB, Hash, Password};
+use Illuminate\Support\Facades\{DB, Hash};
 use Illuminate\Support\{Carbon, Str};
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Validation\Rules\Password as PasswordRule;
@@ -11,12 +12,14 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController
 {
+    public function __construct(private AuthOtp $otp) {}
+
     public function register(Request $r)
     {
         $v = $r->validate(['name' => 'required|string|max:150', 'email' => 'required|email|max:255|unique:users,email', 'password' => ['required', 'confirmed', PasswordRule::min(8)->letters()->numbers()], 'role' => 'sometimes|required|in:farmer,buyer', 'phone' => 'nullable|string|max:30', 'organization' => 'nullable|string|max:255']);
         $v['role'] ??= 'buyer';
         $user = User::create($v);
-        $user->sendEmailVerificationNotification();
+        $this->otp->send($user, 'verification');
         return $this->issueSession($user, 201);
     }
     public function login(Request $r)
@@ -41,12 +44,6 @@ class AuthController
         $r->user()->currentAccessToken()?->delete();
         return response()->noContent()->withCookie(AuthCookie::forget());
     }
-    public function forgot(Request $r)
-    {
-        $v = $r->validate(['email' => 'required|email']);
-        if (User::where('email', $v['email'])->whereNotNull('email_verified_at')->exists()) { Password::sendResetLink($v); }
-        return ['message' => 'Jika akun terdaftar, tautan reset telah dikirim.'];
-    }
     public function reset(Request $r)
     {
         $v = $r->validate(['email' => 'required|email', 'token' => 'required|string', 'password' => ['required', 'confirmed', PasswordRule::min(8)->letters()->numbers()]]);
@@ -66,11 +63,6 @@ class AuthController
         if (!$user) { throw ValidationException::withMessages(['token' => 'Token reset tidak valid atau kedaluwarsa.']); }
         event(new PasswordReset($user));
         return ['message' => 'Kata sandi telah diubah.'];
-    }
-    public function verificationNotice(Request $r)
-    {
-        if (!$r->user()->hasVerifiedEmail()) { $r->user()->sendEmailVerificationNotification(); }
-        return ['message' => 'Jika email belum terverifikasi, tautan verifikasi telah dikirim.'];
     }
     public function verify(\Illuminate\Foundation\Auth\EmailVerificationRequest $r)
     {

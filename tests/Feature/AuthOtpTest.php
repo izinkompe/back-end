@@ -7,6 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 use Tests\TestCase;
 
@@ -22,6 +23,64 @@ class AuthOtpTest extends TestCase
             $message->code = $matches[0] ?? null;
         });
         return $message;
+    }
+
+    public function test_registration_sends_an_otp_for_email_verification(): void
+    {
+        Notification::fake();
+        $message = $this->captureCode();
+        $response = $this->postJson('/api/v1/auth/register', [
+            'name' => 'Buyer', 'email' => 'new@example.test', 'password' => 'Password123', 'password_confirmation' => 'Password123',
+        ])->assertCreated();
+
+        $this->assertNotNull($message->code);
+        Notification::assertNothingSent();
+        $this->withToken($response->json('token'))->postJson('/api/v1/auth/email/verify-otp', ['code' => $message->code])->assertOk();
+        $this->assertNotNull(User::where('email', 'new@example.test')->firstOrFail()->email_verified_at);
+    }
+
+    public function test_verification_notification_endpoint_sends_an_otp(): void
+    {
+        $user = User::create(['name' => 'Buyer', 'email' => 'buyer@example.test', 'role' => 'buyer', 'password' => 'Password123']);
+        $token = $user->createToken('test')->plainTextToken;
+        $message = $this->captureCode();
+        $this->withToken($token)->postJson('/api/v1/auth/email/verification-notification')->assertOk();
+        $this->withToken($token)->postJson('/api/v1/auth/email/verify-otp', ['code' => $message->code])->assertOk();
+    }
+
+    public function test_changing_email_sends_an_otp_to_verify_the_new_address(): void
+    {
+        $user = User::create(['name' => 'Buyer', 'email' => 'buyer@example.test', 'role' => 'buyer', 'password' => 'Password123']);
+        $user->forceFill(['email_verified_at' => now()])->save();
+        $token = $user->createToken('test')->plainTextToken;
+        $message = $this->captureCode();
+        $this->withToken($token)->patchJson('/api/v1/me', ['email' => 'new@example.test', 'current_password' => 'Password123'])->assertOk();
+        $this->assertNotNull($message->code);
+        $this->app['auth']->forgetGuards();
+        $this->withToken($token)->postJson('/api/v1/auth/email/verify-otp', ['code' => $message->code])->assertOk();
+        $this->assertNotNull($user->fresh()->email_verified_at);
+    }
+
+    public function test_registration_and_forgot_password_emails_contain_codes(): void
+    {
+        $messages = [];
+        $this->app['events']->listen(\Illuminate\Mail\Events\MessageSent::class, function ($event) use (&$messages) {
+            $messages[] = $event->message;
+        });
+
+        $this->postJson('/api/v1/auth/register', [
+            'name' => 'Buyer', 'email' => 'new@example.test', 'password' => 'Password123', 'password_confirmation' => 'Password123',
+        ])->assertCreated();
+        $user = User::where('email', 'new@example.test')->firstOrFail();
+        $user->forceFill(['email_verified_at' => now()])->save();
+        $this->postJson('/api/v1/auth/forgot-password', ['email' => $user->email])->assertOk();
+
+        $this->assertCount(2, $messages);
+        foreach ($messages as $message) {
+            $this->assertSame($user->email, $message->getTo()[0]->getAddress());
+            $this->assertMatchesRegularExpression('/\b\d{6}\b/', $message->getTextBody());
+            $this->assertStringNotContainsString('http', $message->getTextBody());
+        }
     }
 
     public function test_email_otp_is_hashed_and_can_only_be_used_once(): void

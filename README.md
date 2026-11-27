@@ -40,6 +40,6 @@ Untuk database yang sudah terpasang: backup dahulu, lalu jalankan php artisan co
 
 ## Status verifikasi
 
-**53 metode pengujian lulus**: 4 unit (aturan murni dan kompilasi SQL baseline+upgrade) serta 49 feature test pada SQLite :memory: dengan HTTP/notification fake. Metode dijalankan lewat PHPUnit bootstrap/harness lokal; tidak ada koneksi MySQL operasional atau pembayaran sungguhan. SQLite uji mendaftarkan fungsi trigonometri PHP karena sebagian build Windows tidak menyediakannya. Pemeriksaan sintaks 68 file PHP source + artisan, target controller pada route, JSON/XML dan tautan dokumentasi juga lulus.
+**55 metode pengujian utama lulus** (4 unit + 51 feature test pada SQLite `:memory:`) ditambah **5 metode pengujian konkurensi nyata pada MySQL/MariaDB (`tests/Concurrency`)**: Metode dijalankan lewat PHPUnit bootstrap/harness lokal; tidak ada koneksi MySQL operasional atau pembayaran sungguhan. SQLite uji mendaftarkan fungsi trigonometri PHP karena sebagian build Windows tidak menyediakannya. Pemeriksaan sintaks 68 file PHP source + artisan, target controller pada route, JSON/XML dan tautan dokumentasi juga lulus.
 
 Kompatibilitas SQL dikompilasi untuk MySQL/MariaDB tanpa menghubungi server. Row locking InnoDB, sandbox Midtrans, SMTP, TLS/proxy aktual, performa, availability, restore backup dan tampilan Next.js tetap perlu diverifikasi pada lingkungan tujuan. Source backend tidak menjadi bukti kelulusan persyaratan UI atau target operasional tersebut.

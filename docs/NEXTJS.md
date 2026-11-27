@@ -6,10 +6,13 @@ Dokumen ini menjelaskan frontend yang perlu dibangun terpisah. Tidak ada source 
 
 - Base API: `http://localhost:8000/api/v1` saat pengembangan.
 - Header JSON: Accept + Content-Type `application/json`.
-- Login/register mengembalikan Bearer token berumur tujuh hari. Sertakan token pada endpoint terlindungi.
-- Untuk Next.js, simpan token di sisi server/BFF melalui cookie HttpOnly, Secure di produksi, dan SameSite yang sesuai. Route handler Next.js meneruskan token sebagai header Authorization ke Laravel. Tambahkan perlindungan CSRF/origin pada route BFF yang mengubah data. Jangan menaruh Server Key Midtrans di variabel `NEXT_PUBLIC_*`.
+- Login/register mengirim cookie HttpOnly `pangantani_token` (umur tujuh hari) lewat header `Set-Cookie`. Panggil API dengan `credentials: 'include'` (fetch) atau `withCredentials: true` (axios); browser menyimpan dan mengirim cookie otomatis. Jangan menyimpan token di localStorage.
+- Request yang mengubah data (POST/PUT/PATCH/DELETE) dengan cookie wajib berasal dari origin yang terdaftar di `CORS_ALLOWED_ORIGINS`; origin lain ditolak 403 (perlindungan CSRF). Browser mengirim header Origin secara otomatis.
+- Logout (`POST /auth/logout`) mencabut token di server dan menghapus cookie di browser.
+- Body JSON login/register tetap memuat `token` untuk klien non-browser (Postman, BFF server, mobile) yang memakai header `Authorization: Bearer`. Header Bearer selalu diutamakan di atas cookie.
+- Frontend dan API harus satu situs (misal `localhost:3000` ↔ `localhost:8000`, atau `app.domain.id` ↔ `api.domain.id`) agar cookie `SameSite=Lax` terkirim. Jika beda domain, atur `AUTH_COOKIE_SAME_SITE=none` (otomatis Secure, wajib HTTPS). Jangan menaruh Server Key Midtrans di variabel `NEXT_PUBLIC_*`.
 - Backend ini memakai Sanctum personal access token; tidak memakai cookie sesi SPA `/sanctum/csrf-cookie`.
-- CORS perlu mencantumkan origin frontend saat request browser langsung. Integrasi BFF dapat memanggil backend dari server.
+- CORS mengizinkan credentials hanya untuk origin pada `CORS_ALLOWED_ORIGINS` (tanpa slash akhir, dipisah koma).
 
 ## Halaman dan endpoint
 

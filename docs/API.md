@@ -37,7 +37,7 @@ Error koneksi gateway yang tidak tertangani mengembalikan error server dan dicat
 | GET | /notifications | Pemilik: notifikasi berhalaman |
 | PATCH | /notifications/{id}/read | Pemilik: tanpa body |
 
-Register/login menghasilkan `{user, token, token_type: "Bearer", expires_in: 604800}`. Password minimal delapan karakter dengan huruf dan angka. Email dapat diganti melalui PATCH /me dengan current_password. Perubahan menghapus status verifikasi, membatalkan token reset email lama dan sesi lain, lalu mengirim tautan verifikasi email baru. Reset password hanya dikirim ke email akun yang sudah diverifikasi.
+Register/login menghasilkan `{user, token, token_type: "Bearer", expires_in: 604800}` **dan** cookie HttpOnly `pangantani_token` (`Path=/`, `SameSite=Lax`, `Secure` di production, umur 7 hari). Endpoint terlindungi menerima cookie tersebut atau header `Authorization: Bearer <token>`; header Bearer diutamakan. Request POST/PUT/PATCH/DELETE yang hanya membawa cookie wajib memiliki header `Origin` yang terdaftar di `CORS_ALLOWED_ORIGINS`, selain itu 403. Logout mencabut token dan mengirim cookie kedaluwarsa. Password minimal delapan karakter dengan huruf dan angka. Email dapat diganti melalui PATCH /me dengan current_password. Perubahan menghapus status verifikasi, membatalkan token reset email lama dan sesi lain, lalu mengirim tautan verifikasi email baru. Reset password hanya dikirim ke email akun yang sudah diverifikasi.
 
 Contoh preferensi:
 
@@ -115,8 +115,8 @@ Urutan verifikasi: buat pengajuan Ã¢â€ â€™ upload bukti ke ID pengaju
 | POST | /orders/{id}/sync-payment | Pihak transaksi/admin: cek status server Midtrans |
 | POST | /payments/midtrans/notification | Publik khusus Midtrans: signature diverifikasi, status dikonfirmasi ke gateway |
 | POST | /farmer/orders/{id}/ready | Petani pemilik: processing Ã¢â€ â€™ ready |
-| POST | /farmer/orders/{id}/propose-pickup | Petani pemilik: starts_at, ends_at |
-| POST | /orders/{id}/pickup-decision | Pembeli pemilik: accept boolean |
+| POST | /farmer/orders/{id}/propose-pickup | Petani pemilik: starts_at, ends_at (pesanan aktif: awaiting_payment, processing, ready) |
+| POST | /orders/{id}/pickup-decision | Pembeli pemilik: accept boolean (jadwal lama berlaku sampai disetujui; tidak memperpanjang tenggat bayar) |
 | POST | /orders/{id}/receive | Pembeli pemilik: received_kg; sesuai berat Ã¢â€ â€™ completed, selisih Ã¢â€ â€™ issue |
 | POST | /orders/{id}/cancel | Pembeli pemilik: reason; belum inisiasi langsung batal, lainnya Ã¢â€ â€™ issue |
 | POST | /orders/{id}/complaints | Pihak transaksi/admin: description |

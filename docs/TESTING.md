@@ -64,8 +64,9 @@ Bukti hasil SQLite dan kompilasi tidak menggantikan uji MariaDB/MySQL aktual, co
 - BusinessRulesTest: 3 metode lulus.
 - SchemaCompatibilityTest: 1 metode lulus, kompilasi 23 tabel beserta upgrade tanpa koneksi database.
 - TransactionTest: 19 metode lulus pada SQLite :memory:.
-- SrsComplianceTest: 30 metode lulus pada SQLite :memory: (termasuk 28 pada suite penuh dan dua pemeriksaan akhir HTTPS/proxy serta berkas palsu).
-- Total: 53 metode lulus, tidak ada kegagalan tersisa. Hasil ini diperoleh melalui PHPUnit bootstrap/runBare pada lingkungan lokal; bukan klaim eksekusi sandbox Midtrans atau MariaDB operasional.
+- SrsComplianceTest: 32 metode lulus pada SQLite :memory: (termasuk atomisitas reset password dan perubahan jadwal pesanan aktif awaiting_payment).
+- Concurrency (MySQL/InnoDB): 5 metode lulus pada database pengujian `pangantani_test` (`PasswordResetConcurrencyTest` dan `MysqlTransactionConcurrencyTest`).
+- Total: 55 metode pengujian suite utama + 5 metode pengujian konkurensi MySQL lulus.
 - 68 file PHP source + artisan lulus lint. JSON/XML, target route, tautan dokumentasi dan skema referensi diperiksa statis.
 
 SQLite pengujian didaftarkan fungsi trigonometrinya melalui PHP agar pencarian radius dapat diuji pada build Windows yang tidak menyertakan fungsi matematika SQLite. Validasi konkurensi dan perilaku SQL MySQL tetap wajib pada staging.

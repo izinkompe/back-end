@@ -78,7 +78,8 @@ class OrderController
         abort_unless($order->farmer_id === $r->user()->id, 403);
         $v = $r->validate(['starts_at' => 'required|date|after:now', 'ends_at' => 'required|date|after:starts_at']);
         return $flow->mutate($order, function ($o) use ($v) {
-            abort_unless(in_array($o->status, ['processing', 'ready']), 409);
+            abort_unless(in_array($o->status, ['awaiting_payment', 'processing', 'ready'], true), 409, 'Jadwal hanya dapat diusulkan pada pesanan aktif.');
+            abort_if($o->status === 'awaiting_payment' && !$o->payment_due_at->isFuture(), 409, 'Tenggat pembayaran pesanan telah lewat.');
             $o->update(['proposed_pickup' => $v]); Activity::notify($o->buyer_id, 'Petani mengusulkan jadwal baru.', '/orders/'.$o->id);
         });
     }
@@ -86,8 +87,18 @@ class OrderController
     {
         $this->buyer($r, $order); $v = $r->validate(['accept' => 'required|boolean']);
         return $flow->mutate($order, function ($o) use ($v) {
-            abort_unless($o->proposed_pickup && in_array($o->status, ['processing', 'ready']), 409, 'Tidak ada usulan jadwal aktif.');
-            if ($v['accept']) { abort_unless(\Carbon\Carbon::parse($o->proposed_pickup['starts_at'])->isFuture(), 409, 'Usulan sudah lewat.'); $o->pickup_starts_at = $o->proposed_pickup['starts_at']; $o->pickup_ends_at = $o->proposed_pickup['ends_at']; }
+            abort_unless($o->proposed_pickup && in_array($o->status, ['awaiting_payment', 'processing', 'ready'], true), 409, 'Tidak ada usulan jadwal aktif.');
+            abort_if($o->status === 'awaiting_payment' && !$o->payment_due_at->isFuture(), 409, 'Tenggat pembayaran pesanan telah lewat.');
+            if ($v['accept']) {
+                $starts = \Carbon\Carbon::parse($o->proposed_pickup['starts_at']);
+                $ends = \Carbon\Carbon::parse($o->proposed_pickup['ends_at']);
+                abort_unless($starts->isFuture() && $ends->gt($starts), 409, 'Usulan sudah lewat.');
+                $o->pickup_starts_at = $starts;
+                $o->pickup_ends_at = $ends;
+                if ($o->status === 'awaiting_payment' && $starts->lt($o->payment_due_at)) {
+                    $o->payment_due_at = $starts;
+                }
+            }
             $o->proposed_pickup = null; $o->save(); Activity::notify($o->farmer_id, $v['accept'] ? 'Jadwal baru disetujui.' : 'Jadwal baru ditolak.', '/orders/'.$o->id);
         });
     }

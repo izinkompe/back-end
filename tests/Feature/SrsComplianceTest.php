@@ -153,6 +153,24 @@ class SrsComplianceTest extends TestCase
         $this->assertSame(0, $this->buyer->tokens()->count());
         $this->assertTrue(\Illuminate\Support\Facades\Hash::check('Changed12345', $this->buyer->fresh()->password));
     }
+    public function test_password_reset_is_atomic_and_rolls_back_when_a_step_fails(): void
+    {
+        $this->buyer->forceFill(['email_verified_at' => now()])->save();
+        $this->buyer->createToken('old-session');
+        $token = \Illuminate\Support\Facades\Password::createToken($this->buyer);
+        $v = ['email' => $this->buyer->email, 'token' => $token, 'password' => 'Changed12345', 'password_confirmation' => 'Changed12345'];
+        User::saved(function () { throw new \RuntimeException('Simulasi kegagalan di tengah reset.'); });
+        $this->postJson('/api/v1/auth/reset-password', $v)->assertStatus(500);
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('Password123', $this->buyer->fresh()->password));
+        $this->assertSame(1, $this->buyer->tokens()->count());
+        $this->assertSame(1, \Illuminate\Support\Facades\DB::table('password_reset_tokens')->where('email', $this->buyer->email)->count());
+        User::flushEventListeners();
+        $this->postJson('/api/v1/auth/reset-password', $v)->assertOk();
+        $this->postJson('/api/v1/auth/reset-password', ['password' => 'Another12345', 'password_confirmation' => 'Another12345'] + $v)->assertUnprocessable();
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('Changed12345', $this->buyer->fresh()->password));
+        $this->assertSame(0, $this->buyer->tokens()->count());
+        $this->assertSame(0, \Illuminate\Support\Facades\DB::table('password_reset_tokens')->count());
+    }
     public function test_expired_reset_and_verification_links_are_rejected(): void
     {
         $this->buyer->forceFill(['email_verified_at' => now()])->save();
@@ -297,5 +315,42 @@ class SrsComplianceTest extends TestCase
         $fake = \Illuminate\Http\UploadedFile::fake()->createWithContent('photo.png', '<html>not an image</html>');
         $this->post('/api/v1/media', ['kind' => 'offer_photo', 'target_id' => $this->offer->id, 'file' => $fake], ['Accept' => 'application/json'])->assertUnprocessable();
         $this->assertSame(0, Media::count());
+    }
+    public function test_active_order_schedule_change_includes_awaiting_payment_and_preserves_rules(): void
+    {
+        $o = $this->order();
+        $oldStart = $o->pickup_starts_at->toIso8601String();
+        $oldEnd = $o->pickup_ends_at->toIso8601String();
+        $oldDue = $o->payment_due_at->toIso8601String();
+        $newStart = now()->addHours(5)->startOfMinute();
+        $newEnd = $newStart->copy()->addHour();
+
+        // 1. Petani dapat mengusulkan jadwal baru saat pesanan masih awaiting_payment; jadwal lama tetap berlaku.
+        Sanctum::actingAs($this->farmer);
+        $this->postJson('/api/v1/farmer/orders/'.$o->id.'/propose-pickup', ['starts_at' => $newStart->toIso8601String(), 'ends_at' => $newEnd->toIso8601String()])->assertOk();
+        $this->assertSame($oldStart, $o->fresh()->pickup_starts_at->toIso8601String());
+        $this->assertSame($oldEnd, $o->fresh()->pickup_ends_at->toIso8601String());
+
+        // 2. Jika pembeli menolak, jadwal lama dan tenggat pembayaran tetap dipertahankan.
+        Sanctum::actingAs($this->buyer);
+        $this->postJson('/api/v1/orders/'.$o->id.'/pickup-decision', ['accept' => false])->assertOk();
+        $this->assertNull($o->fresh()->proposed_pickup);
+        $this->assertSame($oldStart, $o->fresh()->pickup_starts_at->toIso8601String());
+        $this->assertSame($oldDue, $o->fresh()->payment_due_at->toIso8601String());
+
+        // 3. Jika pembeli menyetujui, jadwal baru berlaku tetapi tenggat pembayaran tidak diperpanjang.
+        Sanctum::actingAs($this->farmer);
+        $this->postJson('/api/v1/farmer/orders/'.$o->id.'/propose-pickup', ['starts_at' => $newStart->toIso8601String(), 'ends_at' => $newEnd->toIso8601String()])->assertOk();
+        Sanctum::actingAs($this->buyer);
+        $this->postJson('/api/v1/orders/'.$o->id.'/pickup-decision', ['accept' => true])->assertOk();
+        $this->assertSame($newStart->utc()->format('Y-m-d H:i:s'), $o->fresh()->pickup_starts_at->format('Y-m-d H:i:s'));
+        $this->assertSame($oldDue, $o->fresh()->payment_due_at->toIso8601String());
+
+        // 4. Transaksi selesai atau dibatalkan dilarang diubah jadwalnya.
+        $o->update(['status' => 'cancelled']);
+        Sanctum::actingAs($this->farmer);
+        $this->postJson('/api/v1/farmer/orders/'.$o->id.'/propose-pickup', ['starts_at' => $newStart->toIso8601String(), 'ends_at' => $newEnd->toIso8601String()])->assertConflict();
+        $o->update(['status' => 'completed']);
+        $this->postJson('/api/v1/farmer/orders/'.$o->id.'/propose-pickup', ['starts_at' => $newStart->toIso8601String(), 'ends_at' => $newEnd->toIso8601String()])->assertConflict();
     }
 }

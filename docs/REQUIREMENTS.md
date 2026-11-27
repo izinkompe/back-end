@@ -10,7 +10,7 @@ CHG-01: pengguna secara eksplisit memilih Midtrans. FR-PB-04, FR-AD-02, BR-04 da
 
 | ID | Perilaku backend | Implementasi/bukti otomatis |
 |---|---|---|
-| FR-UM-01 | Registrasi buyer/farmer, akses sesuai peran/kepemilikan, login/logout, reset sekali pakai dan berumur | AuthController, role middleware; TransactionTest dan uji reset/signature SrsComplianceTest |
+| FR-UM-01 | Registrasi buyer/farmer, akses sesuai peran/kepemilikan, login/logout, reset sekali pakai atomik dengan penguncian baris dan berumur | AuthController, role middleware; TransactionTest, SrsComplianceTest dan PasswordResetConcurrencyTest |
 | FR-UM-02 | Profil/kontak/organisasi, perubahan email dengan password dan verifikasi ulang, alamat/koordinat | ProfileController; uji perubahan email, preferensi dan akses alamat |
 | FR-UM-03 | Katalog aktif, detail/foto/kondisi/panen/harga/stok/tenggat; alamat privat hanya pihak transaksi | OfferController, MediaController, snapshot order; uji katalog, privasi dan alur lengkap |
 | FR-UM-04 | Simpan/pulihkan high_contrast dan text_scale (1â€“2) | /me; uji persistensi. Rendering dan preferensi pengunjung di Next.js |
@@ -19,7 +19,7 @@ CHG-01: pengguna secara eksplisit memilih Midtrans. FR-PB-04, FR-AD-02, BR-04 da
 | FR-PT-01 | Pengajuan/bukti, status/alasan, revisi dan kirim ulang | ProfileController, MediaController, AdminController; persetujuan tanpa bukti ditolak |
 | FR-PT-02 | Draf tidak lengkap, penerbitan lengkap oleh petani verified, edit tanpa mengubah snapshot order, tutup penawaran | OfferController; uji draf/publish, snapshot dan alur lengkap |
 | FR-PT-03 | Stock/reserved/sold, koreksi stok fisik termasuk kekurangan, masalah otomatis dan notifikasi, kondisi/penutupan | Inventory; uji shortage, nonnegatif dan kelayakan resale |
-| FR-PT-04 | Slot pengambilan baru, perubahan slot hanya untuk order baru, usulan jadwal memerlukan persetujuan buyer | OfferController/OrderController; uji normalisasi waktu dan persetujuan |
+| FR-PT-04 | Slot pengambilan baru, perubahan slot hanya untuk order baru, usulan jadwal pada order aktif (termasuk awaiting_payment) memerlukan persetujuan buyer | OfferController/OrderController; uji normalisasi waktu, awaiting_payment, tenggat bayar dan persetujuan |
 | FR-PT-05 | Daftar order berstatus, berat/jadwal/payment, paid sebelum ready, hasil penerimaan/masalah | OrderController; TransactionTest dan alur lengkap |
 | FR-PT-06 | Harga awal/minimum/tahap, preview, waktu server dan harga transaksi tetap | Pricing, price-preview; uji perubahan harga, pembulatan, snapshot dan preview |
 | FR-PT-07 | Riwayat periode/status dan ringkasan berat final/inventory milik petani | /orders dan /farmer/reports; sumber ledger unik |

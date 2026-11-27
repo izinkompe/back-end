@@ -26,9 +26,10 @@ class MediaController
         $user = auth('sanctum')->user();
         if ($media->kind === 'offer_photo') {
             $offer = $media->attachable;
-            abort_unless($offer && ($offer->status !== 'draft' || ($user && ($user->role === 'admin' || $offer->farmer_id === $user->id))), 404);
+            abort_unless($offer && ($offer->status !== 'draft' || ($user && $user->hasVerifiedEmail() && ($user->role === 'admin' || $offer->farmer_id === $user->id))), 404);
         } else {
             abort_unless($user, 401);
+            abort_unless($user->hasVerifiedEmail(), 403, 'Email harus diverifikasi.');
             $allowed = $user->role === 'admin' || $media->user_id === $user->id;
             if (in_array($media->kind, ['complaint', 'refund', 'clarification'])) {
                 $orderId = $media->kind === 'clarification' ? Complaint::find($media->attachable?->complaint_id)?->order_id : $media->attachable?->order_id;

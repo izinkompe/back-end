@@ -22,6 +22,7 @@ class ProfileController
                 // Recheck under the lock, then invalidate identity-linked credentials.
                 abort_unless(\Illuminate\Support\Facades\Hash::check($email['current_password'], $user->password), 422, 'Kata sandi saat ini tidak sesuai.');
                 DB::table('password_reset_tokens')->where('email', $user->email)->delete();
+                DB::table('auth_otps')->where('user_id', $user->id)->delete();
                 $user->email = $email['email']; $user->email_verified_at = null;
                 $user->tokens()->where('id', '!=', $r->user()->currentAccessToken()?->id)->delete();
             }

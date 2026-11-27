@@ -13,7 +13,8 @@ class AuthController
 {
     public function register(Request $r)
     {
-        $v = $r->validate(['name' => 'required|string|max:150', 'email' => 'required|email|max:255|unique:users,email', 'password' => ['required', 'confirmed', PasswordRule::min(8)->letters()->numbers()], 'role' => 'required|in:farmer,buyer', 'phone' => 'nullable|string|max:30', 'organization' => 'nullable|string|max:255']);
+        $v = $r->validate(['name' => 'required|string|max:150', 'email' => 'required|email|max:255|unique:users,email', 'password' => ['required', 'confirmed', PasswordRule::min(8)->letters()->numbers()], 'role' => 'sometimes|required|in:farmer,buyer', 'phone' => 'nullable|string|max:30', 'organization' => 'nullable|string|max:255']);
+        $v['role'] ??= 'buyer';
         $user = User::create($v);
         $user->sendEmailVerificationNotification();
         return $this->issueSession($user, 201);
@@ -21,9 +22,11 @@ class AuthController
     public function login(Request $r)
     {
         $v = $r->validate(['email' => 'required|email', 'password' => 'required|string']);
-        $user = User::where('email', $v['email'])->first();
-        if (!$user || !Hash::check($v['password'], $user->password)) { throw ValidationException::withMessages(['email' => 'Email atau kata sandi salah.']); }
-        return $this->issueSession($user);
+        return DB::transaction(function () use ($v) {
+            $user = User::where('email', $v['email'])->lockForUpdate()->first();
+            if (!$user || !Hash::check($v['password'], $user->password)) { throw ValidationException::withMessages(['email' => 'Email atau kata sandi salah.']); }
+            return $this->issueSession($user);
+        }, 3);
     }
     /** Token dikirim lewat cookie HttpOnly untuk browser dan di body JSON untuk klien non-browser. */
     private function issueSession(User $user, int $status = 200): JsonResponse
@@ -56,6 +59,7 @@ class AuthController
             if (!$user) { DB::table('password_reset_tokens')->where('email', $v['email'])->delete(); return null; }
             $user->forceFill(['password' => $v['password'], 'remember_token' => Str::random(60)])->save();
             $user->tokens()->delete();
+            DB::table('auth_otps')->where('user_id', $user->id)->where('purpose', 'reset')->delete();
             DB::table('password_reset_tokens')->where('email', $v['email'])->delete();
             return $user;
         }, 3);

@@ -19,6 +19,8 @@ class TransactionTest extends TestCase
         parent::setUp(); Http::preventStrayRequests();
         $this->buyer = User::create(['name' => 'Pembeli', 'email' => 'buyer@test.test', 'password' => 'Password123', 'role' => 'buyer']);
         $this->farmer = User::create(['name' => 'Petani', 'email' => 'farmer@test.test', 'password' => 'Password123', 'role' => 'farmer']);
+        $this->buyer->forceFill(['email_verified_at' => now()])->save();
+        $this->farmer->forceFill(['email_verified_at' => now()])->save();
         $cat = Category::create(['name' => 'Sayur']);
         $address = Address::create(['user_id' => $this->farmer->id, 'label' => 'Kebun', 'address' => 'Alamat rahasia', 'area' => 'Bogor', 'latitude' => -6.5, 'longitude' => 106.8]);
         $this->offer = Offer::create(['farmer_id' => $this->farmer->id, 'category_id' => $cat->id, 'address_id' => $address->id, 'name' => 'Bayam', 'condition' => 'Baik', 'stock_g' => 10000, 'price_per_kg' => 10000, 'minimum_price' => 5000, 'closes_at' => now()->addHours(2), 'status' => 'active', 'area' => 'Bogor', 'latitude' => -6.5, 'longitude' => 106.8]);
@@ -97,7 +99,7 @@ class TransactionTest extends TestCase
     }
     public function test_order_is_private_and_admin_cannot_register_publicly(): void
     {
-        $o = $this->order(); $other = User::create(['name' => 'Lain', 'email' => 'other@test.test', 'password' => 'Password123', 'role' => 'buyer']); Sanctum::actingAs($other);
+        $o = $this->order(); $other = User::create(['name' => 'Lain', 'email' => 'other@test.test', 'password' => 'Password123', 'role' => 'buyer']); $other->forceFill(['email_verified_at' => now()])->save(); Sanctum::actingAs($other);
         $this->getJson('/api/v1/orders/'.$o->id)->assertForbidden();
         $this->postJson('/api/v1/auth/register', ['name' => 'Admin', 'email' => 'admin@test.test', 'password' => 'Password123', 'password_confirmation' => 'Password123', 'role' => 'admin'])->assertUnprocessable();
     }

@@ -65,4 +65,22 @@ class PasswordResetConcurrencyTest extends TestCase
         $this->assertSame(0, $user->tokens()->count());
         $this->assertSame(0, DB::table('password_reset_tokens')->count());
     }
+
+    public function test_login_cannot_issue_a_token_for_a_password_changed_during_login(): void
+    {
+        $user = User::create(['name' => 'Pembeli', 'email' => 'login-race@pangantani.test', 'role' => 'buyer', 'password' => 'Password123']);
+        DB::beginTransaction();
+        $locked = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+        $locked->update(['password' => 'Changed12345']);
+        $payload = base64_encode(json_encode(['email' => $user->email, 'password' => 'Password123']));
+        $worker = new Process([PHP_BINARY, __DIR__.'/reset_password_worker.php', $payload, '1', '/api/v1/auth/login'], dirname(__DIR__, 2), $this->env, null, 60);
+        $worker->start();
+        sleep(2);
+        DB::commit();
+        $worker->wait();
+
+        $this->assertSame('', trim($worker->getErrorOutput()));
+        $this->assertSame(422, (int) trim($worker->getOutput()));
+        $this->assertSame(0, $user->tokens()->count());
+    }
 }

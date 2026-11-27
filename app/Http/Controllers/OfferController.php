@@ -35,7 +35,7 @@ class OfferController
     }
     public function show(Request $r, Offer $offer)
     {
-        if ($offer->status === 'draft') { $u = auth('sanctum')->user(); abort_unless($u && ($u->role === 'admin' || $u->id === $offer->farmer_id), 404); }
+        if ($offer->status === 'draft') { $u = auth('sanctum')->user(); abort_unless($u && $u->hasVerifiedEmail() && ($u->role === 'admin' || $u->id === $offer->farmer_id), 404); }
         return ['offer' => $offer->load(['steps', 'slots', 'photos']), 'similar' => Offer::with('steps')->where('category_id', $offer->category_id)->whereKeyNot($offer->id)->where('status', 'active')->where('closes_at', '>', now())->whereRaw('stock_g > reserved_g + withheld_g')->limit(4)->get()];
     }
     public function mine(Request $r) { return Offer::with(['steps', 'slots', 'photos'])->where('farmer_id', $r->user()->id)->latest()->paginate(20)->through(fn ($offer) => $offer->makeVisible('moderation_reason')); }

@@ -7,6 +7,7 @@ Dokumen ini menjelaskan frontend yang perlu dibangun terpisah. Tidak ada source 
 - Base API: `http://localhost:8000/api/v1` saat pengembangan.
 - Header JSON: Accept + Content-Type `application/json`.
 - Login/register mengirim cookie HttpOnly `pangantani_token` (umur tujuh hari) lewat header `Set-Cookie`. Panggil API dengan `credentials: 'include'` (fetch) atau `withCredentials: true` (axios); browser menyimpan dan mengirim cookie otomatis. Jangan menyimpan token di localStorage.
+- Setelah login atau registrasi, periksa `user.email_verified_at`. Jika kosong, arahkan pengguna ke verifikasi email. Endpoint fitur akun mengembalikan 403 sampai email diverifikasi; profil, logout, dan endpoint verifikasi tetap tersedia.
 - Request yang mengubah data (POST/PUT/PATCH/DELETE) dengan cookie wajib berasal dari origin yang terdaftar di `CORS_ALLOWED_ORIGINS`; origin lain ditolak 403 (perlindungan CSRF). Browser mengirim header Origin secara otomatis.
 - Logout (`POST /auth/logout`) mencabut token di server dan menghapus cookie di browser.
 - Body JSON login/register tetap memuat `token` untuk klien non-browser (Postman, BFF server, mobile) yang memakai header `Authorization: Bearer`. Header Bearer selalu diutamakan di atas cookie.
@@ -51,6 +52,8 @@ Dokumen ini menjelaskan frontend yang perlu dibangun terpisah. Tidak ada source 
 - Jika layanan peta gagal, tetap tampilkan katalog. Jarak berlabel garis lurus; koordinat marker publik dibulatkan untuk menjaga kerahasiaan lokasi persis. Detail alamat tersedia bagi pihak order.
 
 Frontend perlu menyediakan halaman reset-password yang membaca query email/token lalu mengirim password+confirmation ke API. Sharing tautan, clipboard, tampilan aksesibilitas dan geolokasi memerlukan implementasi browser/Next.js.
+
+Untuk alur OTP, panggil `POST /auth/email/otp` dan `POST /auth/email/verify-otp` dengan token akun, atau `POST /auth/forgot-password/otp` dan `POST /auth/reset-password/otp` untuk reset. Kode enam digit berlaku sepuluh menit. Kontrak payload tersedia di `docs/API.md`.
 
 
 ## Penyesuaian setelah revisi SRS

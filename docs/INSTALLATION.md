@@ -72,7 +72,7 @@ Scheduler wajib berjalan agar tenggat, pemeriksaan status, dan pengingat diprose
 
 ## Email reset
 
-Default MAIL_MAILER=array menahan email di memori dan tidak mengirim/menulis token ke log. Alias lama log dipetakan ke transport array untuk kompatibilitas. Gunakan MAIL_MAILER=smtp dengan host, port, username, password dan alamat pengirim yang sesuai, termasuk mailbox SMTP pengembangan untuk uji lokal. Next.js perlu menyediakan /verify-email dan /reset-password. Email akun harus terverifikasi sebelum tautan reset dapat dikirim.
+Contoh `.env.example` menggunakan Gmail SMTP melalui port 465 dan `MAIL_SCHEME=smtps`. Isi `MAIL_USERNAME` dan `MAIL_FROM_ADDRESS` dengan alamat Gmail pengirim serta `MAIL_PASSWORD` dengan App Password Gmail. Untuk pengujian tanpa pengiriman email, gunakan `MAIL_MAILER=array`. Alias lama log dipetakan ke transport array. Next.js perlu menyediakan /verify-email dan /reset-password. Email akun harus terverifikasi sebelum reset dapat dikirim.
 
 ## Database SQL
 

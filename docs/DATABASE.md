@@ -4,6 +4,8 @@ Migration merupakan sumber utama skema; `database/sql/schema.mysql.sql` menyedia
 
 Migration `2026_11_27_000001` menambahkan `auth_otps` untuk menyimpan hash kode verifikasi dan reset password beserta masa berlaku serta jumlah percobaan.
 
+Migration `2026_11_27_000002` menambahkan kolom `media.disk`. Nilai kosong menunjukkan file lama di disk lokal, sedangkan upload baru mencatat disk tempat berkas disimpan.
+
 ## Relasi
 
 | Tabel | Fungsi |

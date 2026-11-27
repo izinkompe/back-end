@@ -334,6 +334,47 @@ class SrsComplianceTest extends TestCase
         $this->post('/api/v1/media', ['kind' => 'offer_photo', 'target_id' => $this->offer->id, 'file' => $fake], ['Accept' => 'application/json'])->assertUnprocessable();
         $this->assertSame(0, Media::count());
     }
+
+    public function test_uploads_use_object_storage_and_legacy_media_remains_local(): void
+    {
+        $contents = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aVS0AAAAASUVORK5CYII=');
+        $handler = new \Aws\MockHandler([
+            new \Aws\Result([]),
+            new \Aws\Result(['Body' => \GuzzleHttp\Psr7\Utils::streamFor($contents)]),
+        ]);
+        $config = ['driver' => 's3', 'key' => 'test-key', 'secret' => 'test-secret', 'region' => 'auto', 'bucket' => 'private-test', 'endpoint' => 'https://example.test', 'handler' => $handler, 'throw' => true];
+        config(['filesystems.default' => 'object_test', 'filesystems.disks.object_test' => $config]);
+        \Illuminate\Support\Facades\Storage::set('object_test', \Illuminate\Support\Facades\Storage::build($config));
+        \Illuminate\Support\Facades\Storage::fake('local');
+        Sanctum::actingAs($this->farmer);
+
+        $response = $this->post('/api/v1/media', ['kind' => 'offer_photo', 'target_id' => $this->offer->id, 'file' => \Illuminate\Http\UploadedFile::fake()->createWithContent('photo.png', $contents)], ['Accept' => 'application/json'])->assertCreated();
+        $response->assertJsonMissingPath('disk');
+        $media = Media::findOrFail($response->json('id'));
+        $this->assertSame('object_test', $media->disk);
+        $this->assertSame('PutObject', $handler->getLastCommand()->getName());
+        $this->assertFalse($handler->getLastRequest()->hasHeader('x-amz-acl'));
+        $this->get('/api/v1/media/'.$media->id)->assertOk()->assertStreamedContent($contents);
+
+        \Illuminate\Support\Facades\Storage::disk('local')->put('legacy.png', $contents);
+        $legacy = Media::create(['user_id' => $this->farmer->id, 'attachable_type' => Offer::class, 'attachable_id' => $this->offer->id, 'kind' => 'offer_photo', 'path' => 'legacy.png', 'mime' => 'image/png', 'size' => strlen($contents)]);
+        $this->get('/api/v1/media/'.$legacy->id)->assertOk()->assertStreamedContent($contents);
+    }
+
+    public function test_failed_media_record_creation_removes_the_uploaded_file(): void
+    {
+        config(['filesystems.default' => 'upload_test']);
+        $disk = \Illuminate\Support\Facades\Storage::fake('upload_test');
+        Sanctum::actingAs($this->farmer);
+        Media::creating(function () { throw new \RuntimeException('Simulasi kegagalan database'); });
+        try {
+            $file = \Illuminate\Http\UploadedFile::fake()->createWithContent('photo.png', base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aVS0AAAAASUVORK5CYII='));
+            $this->post('/api/v1/media', ['kind' => 'offer_photo', 'target_id' => $this->offer->id, 'file' => $file], ['Accept' => 'application/json'])->assertStatus(500);
+            $this->assertSame([], $disk->allFiles('uploads'));
+        } finally {
+            Media::flushEventListeners();
+        }
+    }
     public function test_active_order_schedule_change_includes_awaiting_payment_and_preserves_rules(): void
     {
         $o = $this->order();

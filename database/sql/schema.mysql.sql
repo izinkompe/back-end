@@ -98,7 +98,7 @@ CREATE TABLE refunds (
 CREATE TABLE media (
  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id BIGINT UNSIGNED NOT NULL,
  attachable_type VARCHAR(255) NULL, attachable_id BIGINT UNSIGNED NULL, kind VARCHAR(30) NOT NULL,
- path VARCHAR(255) NOT NULL, mime VARCHAR(255) NOT NULL, size INT UNSIGNED NOT NULL,
+ path VARCHAR(255) NOT NULL, mime VARCHAR(255) NOT NULL, size INT UNSIGNED NOT NULL, disk VARCHAR(255) NULL,
  created_at TIMESTAMP NULL, updated_at TIMESTAMP NULL, INDEX media_attachable_type_attachable_id_index(attachable_type,attachable_id),
  FOREIGN KEY(user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -177,3 +177,4 @@ CREATE TABLE complaint_messages (
 UPDATE offers SET withheld_g = stock_g WHERE EXISTS (SELECT 1 FROM orders WHERE orders.offer_id = offers.id AND orders.stock_state = 'released');
 INSERT INTO migrations (migration,batch) VALUES ('2026_11_22_000002_align_srs_workflows',2);
 INSERT INTO migrations (migration,batch) VALUES ('2026_11_27_000001_create_auth_otps_table',3);
+INSERT INTO migrations (migration,batch) VALUES ('2026_11_27_000002_add_disk_to_media',4);
